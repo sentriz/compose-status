@@ -3,35 +3,35 @@ package main
 var homeTmpl = `<!doctype html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>{{ .PageTitle }}</title>
   <style>
+  :root {
+    --main-pad-size: 1.2rem;
+    --main-width: 600px;
+  }
   * {
     margin: 0;
     padding: 0;
   }
   body {
-    max-width: 600px;
+    max-width: var(--main-width);
     margin: 0 auto;
-    overflow-y: hidden;
     font-family: monospace;
   }
   #container {
-    height: 100vh;
-    position: relative;
-    padding: 1.2rem;
+    padding: var(--main-pad-size);
   }
-  div::after {
+  #container::after {
     content: "";
     background-image: url("https://www.toptal.com/designers/subtlepatterns/patterns/full-bloom.png");
-    opacity: 0.6;
+    opacity: 0.55;
     top: 0;
-    left: 0;
     bottom: 0;
-    right: 0;
-    position: absolute;
+    width: var(--main-width);
+    transform: translateX(calc(var(--main-pad-size) * -1));
+    position: fixed;
     z-index: -1;
-  }
-  hr {
-    opacity: 0.5;
   }
   a {
     color: unset;
@@ -60,22 +60,20 @@ var homeTmpl = `<!doctype html>
     <br>
     <br>
     {{ range $project, $containers := .Projects }}
-    <hr>
     <p><strong>{{ $project }}</strong></p>
     <table class="c-stats">
     {{ range $container := $containers }}
-      {{ $isDown := eq $container.Status "" }}
-      {{ if $isDown }}
+      {{ if $container.IsDown }}
         <tr class="red">
       {{ else }}
         <tr class="green">
       {{ end }}
       {{ if not (eq $container.Link "") }}
-        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.ID }}</a></td>
+        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
       {{ else }}
-        <td>{{ $container.ID }}</td>
+        <td>{{ $container.Name }}</td>
       {{ end }}
-      {{ if $isDown }}
+      {{ if $container.IsDown }}
         <td>last seen {{ $container.LastSeen | humanDate }}</td>
       {{ else }}
         <td>{{ $container.Status }}</td>

@@ -1,44 +1,30 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	bolt "github.com/etcd-io/bbolt"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/oxtoacart/bpool"
 	"github.com/peterbourgon/ff"
 	"github.com/pkg/errors"
 )
 
-var (
-	bucketKey = []byte("SeenProjects")
-	bufpool   = bpool.NewBufferPool(64)
-)
-
-func i64ToBytes(v int64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(v))
-	return b
-}
-
-func bytesToi64(b []byte) int64 {
-	return int64(binary.BigEndian.Uint64(b))
-}
-
 type container struct {
-	ID       string
+	Name     string
 	Status   string
-	LastSeen time.Time
 	Link     string
+	LastSeen time.Time
+	IsDown   bool
+	Project  string
 }
 
 type settings struct {
@@ -51,133 +37,86 @@ type settings struct {
 
 type controller struct {
 	tmpl     *template.Template
-	db       *bolt.DB
 	client   *docker.Client
 	settings *settings
-}
-
-func (c *controller) projectsDo(cb func(project string, tain *container) error) error {
-	containers, err := c.client.ListContainers(docker.ListContainersOptions{})
-	if err != nil {
-		return errors.Wrap(err, "listing containers")
-	}
-	for _, cRaw := range containers {
-		project, ok := cRaw.Labels["com.docker.compose.project"]
-		if !ok {
-			continue
-		}
-		tain := &container{
-			ID:     cRaw.Names[0],
-			Status: strings.ToLower(cRaw.Status),
-		}
-		if link, ok := cRaw.Labels["traefik.frontend.rule"]; ok {
-			// TODO: support more traefik host rules
-			tain.Link = strings.TrimPrefix(link, "Host:")
-		}
-		if err := cb(project, tain); err != nil {
-			return errors.Wrap(err, "projects callback")
-		}
-	}
-	return nil
+	last     map[string]*container
+	buffPool *bpool.BufferPool
 }
 
 func (c *controller) getProjects() error {
-	//
+	seenIDs := map[string]struct{}{}
 	// insert the current time for any container we see
-	now := i64ToBytes(time.Now().Unix())
-	if err := c.projectsDo(func(project string, tain *container) error {
-		tainKey := fmt.Sprintf("%s___%s", project, tain.ID)
-		return c.db.Update(func(tx *bolt.Tx) error {
-			return tx.
-				Bucket(bucketKey).
-				Put([]byte(tainKey), now)
-		})
-	}); err != nil {
-		return errors.Wrap(err, "background scan")
+	containers, err := c.client.ListContainers(
+		docker.ListContainersOptions{},
+	)
+	if err != nil {
+		return errors.Wrap(err, "listing containers")
 	}
-	//
-	// delete old containers that are last seen before a cut off
+	for _, tain := range containers {
+		project, ok := tain.Labels["com.docker.compose.project"]
+		if !ok {
+			continue
+		}
+		if len(tain.Names) == 0 {
+			return fmt.Errorf("%q does not have a name", tain.ID)
+		}
+		seenIDs[tain.ID] = struct{}{}
+		c.last[tain.ID] = &container{
+			Name:     tain.Names[0],
+			Project:  project,
+			Status:   strings.ToLower(tain.Status),
+			LastSeen: time.Now(),
+		}
+	}
+	// set containers we haven't seen to down, and delete one that haven't
+	// seen since since the cutoff
 	cutoff := time.Now().Add(
 		-1 * time.Duration(c.settings.cleanCutoff) * time.Second,
 	)
-	if err := c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketKey)
-		return b.ForEach(func(k, v []byte) error {
-			lastTime := time.Unix(bytesToi64(v), 0)
-			if lastTime.Before(cutoff) {
-				return b.Delete(k)
-			}
-			return nil
-		})
-	}); err != nil {
-		return errors.Wrap(err, "background clean up")
+	for id, tain := range c.last {
+		if tain.LastSeen.Before(cutoff) {
+			delete(c.last, id)
+			continue
+		}
+		if _, ok := seenIDs[id]; !ok {
+			tain.IsDown = true
+		}
 	}
 	return nil
 }
 
 func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	projects := map[string][]*container{}
-	//
-	// iterate the up containers, appending to projects
-	//
-	// keep track of the container ids that are up so we know
-	// which are down in the view step
-	seenKeys := map[string]struct{}{}
-	if err := c.projectsDo(func(project string, tain *container) error {
-		projects[project] = append(projects[project], tain)
-		tainKey := fmt.Sprintf("%s___%s", project, tain.ID)
-		seenKeys[tainKey] = struct{}{}
-		return nil
-	}); err != nil {
-		http.Error(w, fmt.Sprintf("error getting containers: %v", err), 500)
+		http.Error(w /* hello */, "not found", http.StatusNotFound)
 		return
 	}
 	//
-	// find old containers, show give them a LastSeen to display in red
-	if err := c.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketKey)
-		return b.ForEach(func(k, lastSeenBytes []byte) error {
-			keyStr := string(k)
-			if _, ok := seenKeys[keyStr]; ok {
-				// this container id is up
-				return nil
-			}
-			keyParts := strings.SplitN(keyStr, "___", 2)
-			project := keyParts[0]
-			id := keyParts[1]
-			list, ok := projects[project]
-			if !ok {
-				list = []*container{}
-			}
-			lastSeenI := bytesToi64(lastSeenBytes)
-			lastSeen := time.Unix(lastSeenI, 0)
-			list = append(list, &container{
-				ID:       id,
-				LastSeen: lastSeen,
-			})
-			projects[project] = list
-			return nil
+	// group the last seen by project, inserting so that the container
+	// names are sorted
+	projectMap := map[string][]*container{}
+	for _, tain := range c.last {
+		current := projectMap[tain.Project]
+		i := sort.Search(len(current), func(i int) bool {
+			return current[i].Name >= tain.Name
 		})
-	}); err != nil {
-		http.Error(w, fmt.Sprintf("error finding old containers: %v", err), 500)
-		return
+		current = append(current, nil)
+		copy(current[i+1:], current[i:])
+		current[i] = tain
+		projectMap[tain.Project] = current
 	}
 	//
-	// using a pool of buffers, we can write to one first to catch template
-	// errors, which avoids a superfluous write to the response writer
-	buff := bufpool.Get()
-	defer bufpool.Put(buff)
 	tmplData := struct {
 		Projects  map[string][]*container
 		PageTitle string
 	}{
-		projects,
+		projectMap,
 		c.settings.pageTitle,
 	}
+	//
+	// using a pool of buffers, we can write to one first to catch template
+	// errors, which avoids a superfluous write to the response writer
+	buff := c.buffPool.Get()
+	defer c.buffPool.Put(buff)
 	if err := c.tmpl.Execute(buff, tmplData); err != nil {
 		http.Error(w, fmt.Sprintf("error executing template: %v", err), 500)
 		return
@@ -232,17 +171,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("error creating docker client: %v\n", err)
 	}
-	db, err := bolt.Open(sett.dbPath, 0644, nil)
-	if err != nil {
-		log.Fatalf("error opening database: %v\n", err)
-	}
-	defer db.Close()
-	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(bucketKey)
-		return err
-	}); err != nil {
-		log.Fatalf("error setting up database: %v\n", err)
-	}
 	tmpl, err := template.
 		New("").
 		Funcs(template.FuncMap{
@@ -254,9 +182,10 @@ func main() {
 	}
 	cont := &controller{
 		tmpl:     tmpl,
-		db:       db,
 		client:   client,
 		settings: sett,
+		last:     map[string]*container{},
+		buffPool: bpool.NewBufferPool(64),
 	}
 	go func() {
 		for {
@@ -267,7 +196,7 @@ func main() {
 		}
 	}()
 	http.HandleFunc("/", cont.handleWeb)
-	fmt.Println("listening")
+	fmt.Printf("listening on %q\n", sett.listenAddr)
 	if err := http.ListenAndServe(sett.listenAddr, nil); err != nil {
 		log.Fatalf("error running server: %v\n", err)
 	}
