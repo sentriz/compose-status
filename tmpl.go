@@ -31,7 +31,7 @@ var homeTmpl = `<!doctype html>
     z-index: -1;
   }
   hr {
-    margin: 0.6rem 0;
+    opacity: 0.5;
   }
   a {
     color: unset;
@@ -57,6 +57,7 @@ var homeTmpl = `<!doctype html>
 <body>
   <div id="container">
     <strong>{{ .PageTitle }}</strong>
+    <br>
     <br>
     {{ range $project, $containers := .Projects }}
     <hr>
