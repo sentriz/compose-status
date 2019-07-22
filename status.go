@@ -71,7 +71,8 @@ func (c *controller) projectsDo(cb func(project string, tain *container) error) 
 			Status: strings.ToLower(cRaw.Status),
 		}
 		if link, ok := cRaw.Labels["traefik.frontend.rule"]; ok {
-			tain.Link = link
+			// TODO: support more traefik host rules
+			tain.Link = strings.TrimPrefix(link, "Host:")
 		}
 		if err := cb(project, tain); err != nil {
 			return errors.Wrap(err, "projects callback")
