@@ -209,7 +209,7 @@ func parseArgs() (*settings, error) {
 	)
 	if err := ff.Parse(set,
 		os.Args[1:],
-		ff.WithEnvVarPrefix("SC"),
+		ff.WithEnvVarPrefix("CS"),
 	); err != nil {
 		return nil, errors.Wrap(err, "parsing args")
 	}

@@ -7,8 +7,8 @@ RUN \
 
 FROM scratch
 COPY --from=builder /src/compose-status /bin/
-ENV GONIC_DB_PATH /data/db.db
-ENV GONIC_LISTEN_ADDR :80
+ENV CS_DB_PATH /data/db.db
+ENV CS_LISTEN_ADDR :80
 EXPOSE 80
 VOLUME ["/var/run/docker.sock", "/data"]
 CMD ["/bin/compose-status"]
