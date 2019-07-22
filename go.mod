@@ -1,0 +1,13 @@
+module InI
+
+go 1.12
+
+require (
+	github.com/dustin/go-humanize v1.0.0
+	github.com/etcd-io/bbolt v1.3.3
+	github.com/fsouza/go-dockerclient v1.4.1
+	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c
+	github.com/peterbourgon/ff v1.2.0
+	github.com/pkg/errors v0.8.1
+	go.etcd.io/bbolt v1.3.3 // indirect
+)
