@@ -18,8 +18,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var bufpool = bpool.NewBufferPool(64)
-
 type container struct {
 	Name     string
 	Status   string
@@ -42,12 +40,15 @@ type controller struct {
 	client   *docker.Client
 	settings *settings
 	last     map[string]*container
+	buffPool *bpool.BufferPool
 }
 
 func (c *controller) getProjects() error {
 	seenIDs := map[string]struct{}{}
 	// insert the current time for any container we see
-	containers, err := c.client.ListContainers(docker.ListContainersOptions{})
+	containers, err := c.client.ListContainers(
+		docker.ListContainersOptions{},
+	)
 	if err != nil {
 		return errors.Wrap(err, "listing containers")
 	}
@@ -114,8 +115,8 @@ func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 	//
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer
-	buff := bufpool.Get()
-	defer bufpool.Put(buff)
+	buff := c.buffPool.Get()
+	defer c.buffPool.Put(buff)
 	if err := c.tmpl.Execute(buff, tmplData); err != nil {
 		http.Error(w, fmt.Sprintf("error executing template: %v", err), 500)
 		return
@@ -184,6 +185,7 @@ func main() {
 		client:   client,
 		settings: sett,
 		last:     map[string]*container{},
+		buffPool: bpool.NewBufferPool(64),
 	}
 	go func() {
 		for {
