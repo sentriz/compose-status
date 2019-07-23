@@ -57,7 +57,8 @@ type controller struct {
 func hostFromLabel(label string) string {
 	const prefix = "Host:"
 	if strings.HasPrefix(label, prefix) {
-		return strings.TrimPrefix(label, prefix)
+		trimmed := strings.TrimPrefix(label, prefix)
+		return strings.SplitN(trimmed, ",", 2)[0]
 	}
 	return ""
 }
