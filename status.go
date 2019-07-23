@@ -54,6 +54,14 @@ type controller struct {
 	buffPool *bpool.BufferPool
 }
 
+func hostFromLabel(label string) string {
+	const prefix = "Host:"
+	if strings.HasPrefix(label, prefix) {
+		return strings.TrimPrefix(label, prefix)
+	}
+	return ""
+}
+
 func (c *controller) getProjects() error {
 	seenIDs := map[string]struct{}{}
 	containers, err := c.client.ListContainers(
@@ -76,6 +84,9 @@ func (c *controller) getProjects() error {
 			Project:  project,
 			Status:   strings.ToLower(rawTain.Status),
 			LastSeen: time.Now(),
+		}
+		if label, ok := rawTain.Labels["traefik.frontend.rule"]; ok {
+			tain.Link = hostFromLabel(label)
 		}
 		seenIDs[tain.ID()] = struct{}{}
 		c.last[tain.ID()] = tain
@@ -228,7 +239,7 @@ func main() {
 		os.Exit(0)
 	}()
 	http.HandleFunc("/", cont.handleWeb)
-	fmt.Printf("listening on %q\n", sett.listenAddr)
+	log.Printf("listening on %q\n", sett.listenAddr)
 	if err := http.ListenAndServe(sett.listenAddr, nil); err != nil {
 		log.Fatalf("error running server: %v\n", err)
 	}
