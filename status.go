@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 
@@ -32,7 +36,7 @@ type settings struct {
 	cleanCutoff  int
 	scanInterval int
 	listenAddr   string
-	dbPath       string
+	savePath     string
 }
 
 type controller struct {
@@ -136,16 +140,16 @@ func parseArgs() (*settings, error) {
 		"(in seconds) to wait before forgetting about a down container (optional)",
 	)
 	scanInterval := set.Int(
-		"scan-interval", 10,
+		"scan-interval", 5,
 		"(in seconds) time to wait between background scans (optional)",
 	)
 	listenAddr := set.String(
 		"listen-addr", ":9293",
 		"listen address (optional)",
 	)
-	dbPath := set.String(
-		"db-path", "db.db",
-		"path to database (optional)",
+	savePath := set.String(
+		"save-path", "save.json",
+		"path to save file (optional)",
 	)
 	if err := ff.Parse(set,
 		os.Args[1:],
@@ -158,7 +162,7 @@ func parseArgs() (*settings, error) {
 		cleanCutoff:  *cleanCutoff,
 		scanInterval: *scanInterval,
 		listenAddr:   *listenAddr,
-		dbPath:       *dbPath,
+		savePath:     *savePath,
 	}, nil
 }
 
@@ -187,6 +191,13 @@ func main() {
 		last:     map[string]*container{},
 		buffPool: bpool.NewBufferPool(64),
 	}
+	file, _ := ioutil.ReadFile(sett.savePath)
+	if len(file) > 0 {
+		if err := json.Unmarshal(file, &cont.last); err != nil {
+			log.Fatalf("error unmarshalling save file: %v\n", err)
+		}
+		log.Printf("loaded %d containers from last save", len(cont.last))
+	}
 	go func() {
 		for {
 			if err := cont.getProjects(); err != nil {
@@ -194,6 +205,19 @@ func main() {
 			}
 			time.Sleep(time.Duration(sett.scanInterval) * time.Second)
 		}
+	}()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		lastData, err := json.Marshal(cont.last)
+		if err != nil {
+			log.Fatalf("error marshalling last to json: %v\n", err)
+		}
+		if err := ioutil.WriteFile(sett.savePath, lastData, 0644); err != nil {
+			log.Fatalf("error saving last to disk: %v\n", err)
+		}
+		os.Exit(0)
 	}()
 	http.HandleFunc("/", cont.handleWeb)
 	fmt.Printf("listening on %q\n", sett.listenAddr)
