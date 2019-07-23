@@ -49,13 +49,13 @@ type controller struct {
 
 func (c *controller) getProjects() error {
 	seenIDs := map[string]struct{}{}
-	// insert the current time for any container we see
 	containers, err := c.client.ListContainers(
 		docker.ListContainersOptions{},
 	)
 	if err != nil {
 		return errors.Wrap(err, "listing containers")
 	}
+	// insert the current time for any container we see
 	for _, tain := range containers {
 		project, ok := tain.Labels["com.docker.compose.project"]
 		if !ok {
@@ -94,7 +94,6 @@ func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	//
 	// group the last seen by project, inserting so that the container
 	// names are sorted
 	projectMap := map[string][]*container{}
@@ -116,7 +115,6 @@ func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 		projectMap,
 		c.settings.pageTitle,
 	}
-	//
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer
 	buff := c.buffPool.Get()
@@ -191,6 +189,7 @@ func main() {
 		last:     map[string]*container{},
 		buffPool: bpool.NewBufferPool(64),
 	}
+	// if a save file exists it needs to be loaded into the controller
 	file, _ := ioutil.ReadFile(sett.savePath)
 	if len(file) > 0 {
 		if err := json.Unmarshal(file, &cont.last); err != nil {
@@ -206,6 +205,7 @@ func main() {
 			time.Sleep(time.Duration(sett.scanInterval) * time.Second)
 		}
 	}()
+	// ensure we save to disk on SIGTERM. for example Ctrl-C
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
