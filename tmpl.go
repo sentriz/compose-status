@@ -63,97 +63,20 @@ var homeTmpl = `<!doctype html>
     <br>
     <br>
     {{ range $project, $containers := .Projects }}
-    <hr>
     <p><strong>{{ $project }}</strong></p>
     <table class="c-stats">
     {{ range $container := $containers }}
-      {{ $isDown := eq $container.Status "" }}
-      {{ if $isDown }}
+      {{ if $container.IsDown }}
         <tr class="red">
       {{ else }}
         <tr class="green">
       {{ end }}
       {{ if not (eq $container.Link "") }}
-        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.ID }}</a></td>
+        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
       {{ else }}
-        <td>{{ $container.ID }}</td>
+        <td>{{ $container.Name }}</td>
       {{ end }}
-      {{ if $isDown }}
-        <td>last seen {{ $container.LastSeen | humanDate }}</td>
-      {{ else }}
-        <td>{{ $container.Status }}</td>
-      {{ end }}
-      </tr>
-    {{ end }}
-    </table>
-    {{ end }}
-    {{ range $project, $containers := .Projects }}
-    <hr>
-    <p><strong>{{ $project }}</strong></p>
-    <table class="c-stats">
-    {{ range $container := $containers }}
-      {{ $isDown := eq $container.Status "" }}
-      {{ if $isDown }}
-        <tr class="red">
-      {{ else }}
-        <tr class="green">
-      {{ end }}
-      {{ if not (eq $container.Link "") }}
-        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.ID }}</a></td>
-      {{ else }}
-        <td>{{ $container.ID }}</td>
-      {{ end }}
-      {{ if $isDown }}
-        <td>last seen {{ $container.LastSeen | humanDate }}</td>
-      {{ else }}
-        <td>{{ $container.Status }}</td>
-      {{ end }}
-      </tr>
-    {{ end }}
-    </table>
-    {{ end }}
-    {{ range $project, $containers := .Projects }}
-    <hr>
-    <p><strong>{{ $project }}</strong></p>
-    <table class="c-stats">
-    {{ range $container := $containers }}
-      {{ $isDown := eq $container.Status "" }}
-      {{ if $isDown }}
-        <tr class="red">
-      {{ else }}
-        <tr class="green">
-      {{ end }}
-      {{ if not (eq $container.Link "") }}
-        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.ID }}</a></td>
-      {{ else }}
-        <td>{{ $container.ID }}</td>
-      {{ end }}
-      {{ if $isDown }}
-        <td>last seen {{ $container.LastSeen | humanDate }}</td>
-      {{ else }}
-        <td>{{ $container.Status }}</td>
-      {{ end }}
-      </tr>
-    {{ end }}
-    </table>
-    {{ end }}
-    {{ range $project, $containers := .Projects }}
-    <hr>
-    <p><strong>{{ $project }}</strong></p>
-    <table class="c-stats">
-    {{ range $container := $containers }}
-      {{ $isDown := eq $container.Status "" }}
-      {{ if $isDown }}
-        <tr class="red">
-      {{ else }}
-        <tr class="green">
-      {{ end }}
-      {{ if not (eq $container.Link "") }}
-        <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.ID }}</a></td>
-      {{ else }}
-        <td>{{ $container.ID }}</td>
-      {{ end }}
-      {{ if $isDown }}
+      {{ if $container.IsDown }}
         <td>last seen {{ $container.LastSeen | humanDate }}</td>
       {{ else }}
         <td>{{ $container.Status }}</td>
