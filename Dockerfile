@@ -7,7 +7,7 @@ RUN \
 
 FROM scratch
 COPY --from=builder /src/compose-status /bin/
-ENV CS_DB_PATH /data/db.db
+ENV CS_SAVE_PATH /data/save.json
 ENV CS_LISTEN_ADDR :80
 EXPOSE 80
 VOLUME ["/var/run/docker.sock", "/data"]
