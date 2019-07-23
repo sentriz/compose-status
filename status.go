@@ -31,6 +31,13 @@ type container struct {
 	Project  string
 }
 
+// we need some sort of unique identifier for containers (when tracking ups
+// and downs). the "ID" field from the engine won't do, because we want a
+// recreated container with probably a different ID to be considered the same
+func (c *container) ID() string {
+	return fmt.Sprintf("%s___%s", c.Project, c.Name)
+}
+
 type settings struct {
 	pageTitle    string
 	cleanCutoff  int
@@ -56,21 +63,22 @@ func (c *controller) getProjects() error {
 		return errors.Wrap(err, "listing containers")
 	}
 	// insert the current time for any container we see
-	for _, tain := range containers {
-		project, ok := tain.Labels["com.docker.compose.project"]
+	for _, rawTain := range containers {
+		project, ok := rawTain.Labels["com.docker.compose.project"]
 		if !ok {
 			continue
 		}
-		if len(tain.Names) == 0 {
-			return fmt.Errorf("%q does not have a name", tain.ID)
+		if len(rawTain.Names) == 0 {
+			return fmt.Errorf("%q does not have a name", rawTain.ID)
 		}
-		seenIDs[tain.ID] = struct{}{}
-		c.last[tain.ID] = &container{
-			Name:     tain.Names[0],
+		tain := &container{
+			Name:     rawTain.Names[0],
 			Project:  project,
-			Status:   strings.ToLower(tain.Status),
+			Status:   strings.ToLower(rawTain.Status),
 			LastSeen: time.Now(),
 		}
+		seenIDs[tain.ID()] = struct{}{}
+		c.last[tain.ID()] = tain
 	}
 	// set containers we haven't seen to down, and delete one that haven't
 	// seen since since the cutoff
