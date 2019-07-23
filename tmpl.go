@@ -1,4 +1,4 @@
-package main
+package status
 
 const homeTmpl = `
   <!doctype html>
@@ -20,6 +20,12 @@ const homeTmpl = `
       margin: 0 auto;
       font-family: monospace;
     }
+    a {
+      color: unset;
+    }
+    section ~ section {
+      margin-top: var(--main-pad-size);
+    }
     #container {
       padding: var(--main-pad-size);
     }
@@ -30,12 +36,15 @@ const homeTmpl = `
       top: 0;
       bottom: 0;
       width: var(--main-width);
-      transform: translateX(calc(var(--main-pad-size) * -1));
+      left: calc((100vw - var(--main-width)) / 2);
       position: fixed;
       z-index: -1;
     }
-    a {
-      color: unset;
+    .right {
+      text-align: right;
+    }
+    .light {
+      opacity: 0.3;
     }
     .red {
       color: red;
@@ -57,31 +66,46 @@ const homeTmpl = `
   </head>
   <body>
     <div id="container">
-      <strong>{{ .PageTitle }}</strong>
-      <br>
-      <br>
-      {{ range $project, $containers := .Projects }}
-      <p><strong>{{ $project }}</strong></p>
-      <table class="c-stats">
-      {{ range $container := $containers }}
-        {{ if $container.IsDown }}
-          <tr class="red">
-        {{ else }}
-          <tr class="green">
-        {{ end }}
-        {{ if not (eq $container.Link "") }}
-          <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
-        {{ else }}
-          <td>{{ $container.Name }}</td>
-        {{ end }}
-        {{ if $container.IsDown }}
-          <td>last seen {{ $container.LastSeen | humanDate }}</td>
-        {{ else }}
-          <td>{{ $container.Status }}</td>
-        {{ end }}
-        </tr>
+      {{ if not (eq .PageTitle "") }}
+        <section>
+          <strong>{{ .PageTitle }}</strong>
+        </section>
       {{ end }}
-      </table>
+      {{ if eq (len .Projects) 0 }}
+        <section class="right">
+          <i>no projects up</i>
+        </section>
+      {{ else }}
+        <section>
+          {{ range $project, $containers := .Projects }}
+          <p><strong>{{ $project }}</strong></p>
+          <table class="c-stats">
+          {{ range $container := $containers }}
+            {{ if $container.IsDown }}
+              <tr class="red">
+            {{ else }}
+              <tr class="green">
+            {{ end }}
+            {{ if not (eq $container.Link "") }}
+              <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
+            {{ else }}
+              <td>{{ $container.Name }}</td>
+            {{ end }}
+            {{ if $container.IsDown }}
+              <td>last seen {{ $container.LastSeen | humanDate }}</td>
+            {{ else }}
+              <td>{{ $container.Status }}</td>
+            {{ end }}
+            </tr>
+          {{ end }}
+          </table>
+          {{ end }}
+        </section>
+      {{ end }}
+      {{ if .ShowCredit }}
+        <section class="right light">
+          <i><a target="_blank" href="https://github.com/sentriz/compose-status">compose status</a></i>
+        </section>
       {{ end }}
     </div>
   </body>

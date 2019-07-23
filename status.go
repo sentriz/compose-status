@@ -1,28 +1,21 @@
-package main
+package status
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"sort"
 	"strings"
-	"syscall"
 	"text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/oxtoacart/bpool"
-	"github.com/peterbourgon/ff"
 	"github.com/pkg/errors"
 )
 
-type container struct {
+type Container struct {
 	Name     string
 	Status   string
 	Link     string
@@ -34,35 +27,92 @@ type container struct {
 // we need some sort of unique identifier for containers (when tracking ups
 // and downs). the "ID" field from the engine won't do, because we want a
 // recreated container with probably a different ID to be considered the same
-func (c *container) ID() string {
+func (c *Container) ID() string {
 	return fmt.Sprintf("%s___%s", c.Project, c.Name)
 }
 
-type settings struct {
+type Controller struct {
+	tmpl         *template.Template
+	client       *docker.Client
+	lastProjects map[string]*Container
+	buffPool     *bpool.BufferPool
+	cleanCutoff  time.Duration
 	pageTitle    string
-	cleanCutoff  int
-	scanInterval int
-	listenAddr   string
-	savePath     string
+	showCredit   bool
 }
 
-type controller struct {
-	tmpl     *template.Template
-	client   *docker.Client
-	settings *settings
-	last     map[string]*container
-	buffPool *bpool.BufferPool
+func WithCleanCutoff(dur time.Duration) func(*Controller) error {
+	return func(c *Controller) error {
+		c.cleanCutoff = dur
+		return nil
+	}
+}
+
+func WithTitle(title string) func(*Controller) error {
+	return func(c *Controller) error {
+		if title == "" {
+			return nil
+		}
+		c.pageTitle = title
+		return nil
+	}
+}
+
+func WithResume(file []byte) func(*Controller) error {
+	return func(c *Controller) error {
+		if len(file) <= 0 {
+			return nil
+		}
+		return json.Unmarshal(file, &c.lastProjects)
+	}
+}
+
+func WithCredit(c *Controller) error {
+	c.showCredit = true
+	return nil
+}
+
+func NewController(options ...func(*Controller) error) (*Controller, error) {
+	client, err := docker.NewClientFromEnv()
+	if err != nil {
+		return nil, errors.Wrap(err, "creating docker client")
+	}
+	tmpl, err := template.
+		New("").
+		Funcs(template.FuncMap{
+			"humanDate": humanize.Time,
+		}).
+		Parse(homeTmpl)
+	if err != nil {
+		return nil, errors.Wrap(err, "parsing template")
+	}
+	cont := &Controller{
+		tmpl:         tmpl,
+		client:       client,
+		lastProjects: map[string]*Container{},
+		buffPool:     bpool.NewBufferPool(64),
+		// defaults
+		cleanCutoff: 3 * 24 * time.Hour,
+		pageTitle:   "server status",
+	}
+	for _, option := range options {
+		if err := option(cont); err != nil {
+			return nil, errors.Wrap(err, "running option")
+		}
+	}
+	return cont, nil
 }
 
 func hostFromLabel(label string) string {
 	const prefix = "Host:"
 	if strings.HasPrefix(label, prefix) {
-		return strings.TrimPrefix(label, prefix)
+		trimmed := strings.TrimPrefix(label, prefix)
+		return strings.SplitN(trimmed, ",", 2)[0]
 	}
 	return ""
 }
 
-func (c *controller) getProjects() error {
+func (c *Controller) GetProjects() error {
 	seenIDs := map[string]struct{}{}
 	containers, err := c.client.ListContainers(
 		docker.ListContainersOptions{},
@@ -79,7 +129,7 @@ func (c *controller) getProjects() error {
 		if len(rawTain.Names) == 0 {
 			return fmt.Errorf("%q does not have a name", rawTain.ID)
 		}
-		tain := &container{
+		tain := &Container{
 			Name:     rawTain.Names[0],
 			Project:  project,
 			Status:   strings.ToLower(rawTain.Status),
@@ -89,16 +139,14 @@ func (c *controller) getProjects() error {
 			tain.Link = hostFromLabel(label)
 		}
 		seenIDs[tain.ID()] = struct{}{}
-		c.last[tain.ID()] = tain
+		c.lastProjects[tain.ID()] = tain
 	}
 	// set containers we haven't seen to down, and delete one that haven't
 	// seen since since the cutoff
-	cutoff := time.Now().Add(
-		-1 * time.Duration(c.settings.cleanCutoff) * time.Second,
-	)
-	for id, tain := range c.last {
+	cutoff := time.Now().Add(-1 * c.cleanCutoff)
+	for id, tain := range c.lastProjects {
 		if tain.LastSeen.Before(cutoff) {
-			delete(c.last, id)
+			delete(c.lastProjects, id)
 			continue
 		}
 		if _, ok := seenIDs[id]; !ok {
@@ -108,15 +156,15 @@ func (c *controller) getProjects() error {
 	return nil
 }
 
-func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
+func (c *Controller) GetLastProjects() map[string]*Container {
+	return c.lastProjects
+}
+
+func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// group the last seen by project, inserting so that the container
 	// names are sorted
-	projectMap := map[string][]*container{}
-	for _, tain := range c.last {
+	projectMap := map[string][]*Container{}
+	for _, tain := range c.lastProjects {
 		current := projectMap[tain.Project]
 		i := sort.Search(len(current), func(i int) bool {
 			return current[i].Name >= tain.Name
@@ -128,11 +176,13 @@ func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 	}
 	//
 	tmplData := struct {
-		Projects  map[string][]*container
-		PageTitle string
+		Projects   map[string][]*Container
+		PageTitle  string
+		ShowCredit bool
 	}{
 		projectMap,
-		c.settings.pageTitle,
+		c.pageTitle,
+		c.showCredit,
 	}
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer
@@ -144,103 +194,4 @@ func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	buff.WriteTo(w)
-}
-
-func parseArgs() (*settings, error) {
-	set := flag.NewFlagSet("compose-status", flag.ExitOnError)
-	pageTitle := set.String(
-		"page-title", "server status",
-		"title to show at the top of the page (optional)",
-	)
-	cleanCutoff := set.Int(
-		"clean-cutoff", 259200,
-		"(in seconds) to wait before forgetting about a down container (optional)",
-	)
-	scanInterval := set.Int(
-		"scan-interval", 5,
-		"(in seconds) time to wait between background scans (optional)",
-	)
-	listenAddr := set.String(
-		"listen-addr", ":9293",
-		"listen address (optional)",
-	)
-	savePath := set.String(
-		"save-path", "save.json",
-		"path to save file (optional)",
-	)
-	if err := ff.Parse(set,
-		os.Args[1:],
-		ff.WithEnvVarPrefix("CS"),
-	); err != nil {
-		return nil, errors.Wrap(err, "parsing args")
-	}
-	return &settings{
-		pageTitle:    *pageTitle,
-		cleanCutoff:  *cleanCutoff,
-		scanInterval: *scanInterval,
-		listenAddr:   *listenAddr,
-		savePath:     *savePath,
-	}, nil
-}
-
-func main() {
-	sett, err := parseArgs()
-	if err != nil {
-		log.Fatalf("error parsing args: %v\n", err)
-	}
-	client, err := docker.NewClientFromEnv()
-	if err != nil {
-		log.Fatalf("error creating docker client: %v\n", err)
-	}
-	tmpl, err := template.
-		New("").
-		Funcs(template.FuncMap{
-			"humanDate": humanize.Time,
-		}).
-		Parse(homeTmpl)
-	if err != nil {
-		log.Fatalf("error creating template: %v\n", err)
-	}
-	cont := &controller{
-		tmpl:     tmpl,
-		client:   client,
-		settings: sett,
-		last:     map[string]*container{},
-		buffPool: bpool.NewBufferPool(64),
-	}
-	// if a save file exists it needs to be loaded into the controller
-	file, _ := ioutil.ReadFile(sett.savePath)
-	if len(file) > 0 {
-		if err := json.Unmarshal(file, &cont.last); err != nil {
-			log.Fatalf("error unmarshalling save file: %v\n", err)
-		}
-		log.Printf("loaded %d containers from last save", len(cont.last))
-	}
-	go func() {
-		for {
-			if err := cont.getProjects(); err != nil {
-				log.Printf("error getting projects: %v\n", err)
-			}
-			time.Sleep(time.Duration(sett.scanInterval) * time.Second)
-		}
-	}()
-	// ensure we save to disk on SIGTERM. for example Ctrl-C
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		lastData, err := json.Marshal(cont.last)
-		if err != nil {
-			log.Fatalf("error marshalling last to json: %v\n", err)
-		}
-		if err := ioutil.WriteFile(sett.savePath, lastData, 0644); err != nil {
-			log.Fatalf("error saving last to disk: %v\n", err)
-		}
-		os.Exit(0)
-	}()
-	http.HandleFunc("/", cont.handleWeb)
-	log.Printf("listening on %q\n", sett.listenAddr)
-	if err := http.ListenAndServe(sett.listenAddr, nil); err != nil {
-		log.Fatalf("error running server: %v\n", err)
-	}
 }
