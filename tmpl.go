@@ -25,16 +25,13 @@ var homeTmpl = `<!doctype html>
   #container::after {
     content: "";
     background-image: url("https://www.toptal.com/designers/subtlepatterns/patterns/full-bloom.png");
-    opacity: 0.6;
+    opacity: 0.55;
     top: 0;
     bottom: 0;
     width: var(--main-width);
     transform: translateX(calc(var(--main-pad-size) * -1));
     position: fixed;
     z-index: -1;
-  }
-  hr {
-    opacity: 0.5;
   }
   a {
     color: unset;
