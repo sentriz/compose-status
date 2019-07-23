@@ -1,4 +1,4 @@
-module InI
+module senan.xyz/g/compose-status
 
 go 1.12
 
