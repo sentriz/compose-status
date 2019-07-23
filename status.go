@@ -91,7 +91,7 @@ func (c *controller) getProjects() error {
 
 func (c *controller) handleWeb(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.Error(w /* hello */, "not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	//
