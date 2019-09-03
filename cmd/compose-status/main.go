@@ -21,12 +21,16 @@ var (
 	progPrefix   = "CS"
 	argSet       = flag.NewFlagSet(progName, flag.ExitOnError)
 	argPageTitle = argSet.String(
-		"page-title", "",
+		"page-title", "server status",
 		"title to show at the top of the page (optional)",
 	)
 	argCleanCutoff = argSet.Int(
-		"clean-cutoff", 0,
+		"clean-cutoff", 259200,
 		"(in seconds) to wait before forgetting about a down container (optional) (default 3days)",
+	)
+	argGroupLabel = argSet.String(
+		"group-label", "com.docker.compose.project",
+		"docker label to group by (optional)",
 	)
 	argScanInterval = argSet.Int(
 		"scan-interval", 5,
@@ -55,6 +59,7 @@ func main() {
 		status.WithCleanCutoff(time.Duration(*argCleanCutoff)*time.Second),
 		status.WithResume(save),
 		status.WithTitle(*argPageTitle),
+		status.WithGroupLabel(*argGroupLabel),
 		status.WithCredit,
 	)
 	if err != nil {

@@ -37,6 +37,7 @@ type Controller struct {
 	lastProjects map[string]*Container
 	buffPool     *bpool.BufferPool
 	cleanCutoff  time.Duration
+	groupLabel   string
 	pageTitle    string
 	showCredit   bool
 }
@@ -50,10 +51,14 @@ func WithCleanCutoff(dur time.Duration) func(*Controller) error {
 
 func WithTitle(title string) func(*Controller) error {
 	return func(c *Controller) error {
-		if title == "" {
-			return nil
-		}
 		c.pageTitle = title
+		return nil
+	}
+}
+
+func WithGroupLabel(label string) func(*Controller) error {
+	return func(c *Controller) error {
+		c.groupLabel = label
 		return nil
 	}
 }
@@ -94,6 +99,7 @@ func NewController(options ...func(*Controller) error) (*Controller, error) {
 		// defaults
 		cleanCutoff: 3 * 24 * time.Hour,
 		pageTitle:   "server status",
+		groupLabel:  "com.docker.compose.project",
 	}
 	for _, option := range options {
 		if err := option(cont); err != nil {
@@ -122,7 +128,7 @@ func (c *Controller) GetProjects() error {
 	}
 	// insert the current time for any container we see
 	for _, rawTain := range containers {
-		project, ok := rawTain.Labels["com.docker.compose.project"]
+		project, ok := rawTain.Labels[c.groupLabel]
 		if !ok {
 			continue
 		}
