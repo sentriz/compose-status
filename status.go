@@ -50,6 +50,9 @@ func WithCleanCutoff(dur time.Duration) func(*Controller) error {
 
 func WithTitle(title string) func(*Controller) error {
 	return func(c *Controller) error {
+		if title == "" {
+			return nil
+		}
 		c.pageTitle = title
 		return nil
 	}
@@ -173,11 +176,13 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	//
 	tmplData := struct {
-		Projects  map[string][]*Container
-		PageTitle string
+		Projects   map[string][]*Container
+		PageTitle  string
+		ShowCredit bool
 	}{
 		projectMap,
 		c.pageTitle,
+		c.showCredit,
 	}
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer
