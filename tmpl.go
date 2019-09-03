@@ -1,4 +1,4 @@
-package main
+package status
 
 const homeTmpl = `
   <!doctype html>
