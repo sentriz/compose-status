@@ -3,6 +3,7 @@ package status
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -13,6 +14,9 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/oxtoacart/bpool"
 	"github.com/pkg/errors"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/load"
+	"github.com/shirou/gopsutil/mem"
 )
 
 type Container struct {
@@ -22,6 +26,15 @@ type Container struct {
 	LastSeen time.Time
 	IsDown   bool
 	Project  string
+}
+
+type Stats struct {
+	Load1    float64
+	Load5    float64
+	Load15   float64
+	MemUsed  uint64
+	MemTotal uint64
+	CPU      float64
 }
 
 // we need some sort of unique identifier for containers (when tracking ups
@@ -34,17 +47,26 @@ func (c *Container) ID() string {
 type Controller struct {
 	tmpl         *template.Template
 	client       *docker.Client
-	lastProjects map[string]*Container
 	buffPool     *bpool.BufferPool
 	cleanCutoff  time.Duration
+	scanInterval time.Duration
 	groupLabel   string
 	pageTitle    string
 	showCredit   bool
+	LastProjects map[string]*Container
+	LastStats    *Stats
 }
 
 func WithCleanCutoff(dur time.Duration) func(*Controller) error {
 	return func(c *Controller) error {
 		c.cleanCutoff = dur
+		return nil
+	}
+}
+
+func WithScanInternal(dur time.Duration) func(*Controller) error {
+	return func(c *Controller) error {
+		c.scanInterval = dur
 		return nil
 	}
 }
@@ -68,7 +90,7 @@ func WithResume(file []byte) func(*Controller) error {
 		if len(file) <= 0 {
 			return nil
 		}
-		return json.Unmarshal(file, &c.lastProjects)
+		return json.Unmarshal(file, &c.LastProjects)
 	}
 }
 
@@ -85,7 +107,8 @@ func NewController(options ...func(*Controller) error) (*Controller, error) {
 	tmpl, err := template.
 		New("").
 		Funcs(template.FuncMap{
-			"humanDate": humanize.Time,
+			"humanDate":  humanize.Time,
+			"humanBytes": humanize.Bytes,
 		}).
 		Parse(homeTmpl)
 	if err != nil {
@@ -94,8 +117,9 @@ func NewController(options ...func(*Controller) error) (*Controller, error) {
 	cont := &Controller{
 		tmpl:         tmpl,
 		client:       client,
-		lastProjects: map[string]*Container{},
 		buffPool:     bpool.NewBufferPool(64),
+		LastProjects: map[string]*Container{},
+		LastStats:    &Stats{},
 		// defaults
 		cleanCutoff: 3 * 24 * time.Hour,
 		pageTitle:   "server status",
@@ -145,14 +169,14 @@ func (c *Controller) GetProjects() error {
 			tain.Link = hostFromLabel(label)
 		}
 		seenIDs[tain.ID()] = struct{}{}
-		c.lastProjects[tain.ID()] = tain
+		c.LastProjects[tain.ID()] = tain
 	}
 	// set containers we haven't seen to down, and delete one that haven't
 	// seen since since the cutoff
 	cutoff := time.Now().Add(-1 * c.cleanCutoff)
-	for id, tain := range c.lastProjects {
+	for id, tain := range c.LastProjects {
 		if tain.LastSeen.Before(cutoff) {
-			delete(c.lastProjects, id)
+			delete(c.LastProjects, id)
 			continue
 		}
 		if _, ok := seenIDs[id]; !ok {
@@ -162,15 +186,48 @@ func (c *Controller) GetProjects() error {
 	return nil
 }
 
-func (c *Controller) GetLastProjects() map[string]*Container {
-	return c.lastProjects
+func (c *Controller) GetStats() error {
+	loadStat, err := load.Avg()
+	if err != nil {
+		return errors.Wrap(err, "get load stat")
+	}
+	c.LastStats.Load1 = loadStat.Load1
+	c.LastStats.Load5 = loadStat.Load5
+	c.LastStats.Load15 = loadStat.Load15
+	memStat, err := mem.VirtualMemory()
+	if err != nil {
+		return errors.Wrap(err, "get mem stat")
+	}
+	c.LastStats.MemUsed = memStat.Used
+	c.LastStats.MemTotal = memStat.Total
+	percent, err := cpu.Percent(5*time.Second, false)
+	if err != nil {
+		return errors.Wrap(err, "get cpu stat")
+	}
+	if len(percent) != 1 {
+		return fmt.Errorf("invalid cpu response")
+	}
+	c.LastStats.CPU = percent[0]
+	return nil
+}
+
+func (c *Controller) Start() {
+	ticker := time.NewTicker(c.scanInterval)
+	for range ticker.C {
+		if err := c.GetProjects(); err != nil {
+			log.Printf("error getting projects: %v\n", err)
+		}
+		if err := c.GetStats(); err != nil {
+			log.Printf("error getting stats: %v\n", err)
+		}
+	}
 }
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// group the last seen by project, inserting so that the container
 	// names are sorted
 	projectMap := map[string][]*Container{}
-	for _, tain := range c.lastProjects {
+	for _, tain := range c.LastProjects {
 		current := projectMap[tain.Project]
 		i := sort.Search(len(current), func(i int) bool {
 			return current[i].Name >= tain.Name
@@ -182,13 +239,15 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	//
 	tmplData := struct {
-		Projects   map[string][]*Container
 		PageTitle  string
 		ShowCredit bool
+		Projects   map[string][]*Container
+		Stats      *Stats
 	}{
-		projectMap,
 		c.pageTitle,
 		c.showCredit,
+		projectMap,
+		c.LastStats,
 	}
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer

@@ -8,4 +8,5 @@ require (
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c
 	github.com/peterbourgon/ff v1.2.0
 	github.com/pkg/errors v0.8.1
+	github.com/shirou/gopsutil v2.18.12+incompatible
 )

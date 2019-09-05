@@ -1,0 +1,8 @@
+version: '3'
+services:
+  one:
+    image: jwilder/whoami
+  two:
+    image: jwilder/whoami
+  three:
+    image: jwilder/whoami

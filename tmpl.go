@@ -8,7 +8,7 @@ const homeTmpl = `
     <title>{{ .PageTitle }}</title>
     <style>
     :root {
-      --main-pad-size: 1.2rem;
+      --main-pad-size: 1rem;
       --main-width: 600px;
     }
     * {
@@ -36,7 +36,7 @@ const homeTmpl = `
       top: 0;
       bottom: 0;
       width: var(--main-width);
-      left: calc((100vw - var(--main-width) - var(--main-pad-size)) / 2);
+      left: calc((100vw - var(--main-width)) / 2);
       position: fixed;
       z-index: -1;
     }
@@ -52,15 +52,15 @@ const homeTmpl = `
     .green {
       color: green;
     }
-    .c-stats {
+    .stat-table {
       margin-left: auto;
       text-align: right;
     }
-    .c-stats tr td:last-child {
+    .stat-table tr td:last-child {
       font-weight: bold;
     }
-    .c-stats tr td:last-child::before {
-      content: '⠀'
+    .stat-table tr td:last-child::before {
+      content: '\00a0'
     }
     </style>
   </head>
@@ -71,6 +71,22 @@ const homeTmpl = `
           <strong>{{ .PageTitle }}</strong>
         </section>
       {{ end }}
+      <section class="right">
+        <table class="stat-table">
+          <tr>
+            <td>cpu</td>
+            <td>{{ printf "%.2f" .Stats.CPU }}%</td>
+          </tr>
+          <tr>
+            <td>load</td>
+            <td>{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
+          </tr>
+          <tr>
+            <td>memory</td>
+            <td>{{ .Stats.MemUsed | humanBytes }} / {{ .Stats.MemTotal | humanBytes }}</td>
+          </tr>
+        </table>
+      </section>
       {{ if eq (len .Projects) 0 }}
         <section class="right">
           <i>no projects up</i>
@@ -79,7 +95,7 @@ const homeTmpl = `
         <section>
           {{ range $project, $containers := .Projects }}
           <p><strong>{{ $project }}</strong></p>
-          <table class="c-stats">
+          <table class="stat-table">
           {{ range $container := $containers }}
             {{ if $container.IsDown }}
               <tr class="red">
