@@ -1,14 +1,17 @@
+// vi: ft=html
+
 package status
 
 const homeTmpl = `
   <!doctype html>
   <html>
   <head>
+    <link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAD/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAD6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAA+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAADwAAAA8AAAAPAAAAD/wAAA/8AAAP/AAAD/wAAA/8AAAA==" rel="icon" type="image/x-icon" />
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>{{ .PageTitle }}</title>
     <style>
     :root {
-      --main-pad-size: 1.2rem;
+      --main-pad-size: 1rem;
       --main-width: 600px;
     }
     * {
@@ -52,16 +55,19 @@ const homeTmpl = `
     .green {
       color: green;
     }
-    .c-stats {
+    .stat-table {
       margin-left: auto;
       text-align: right;
     }
-    .c-stats tr td:last-child {
+    .stat-table tr td:last-child {
       font-weight: bold;
     }
-    .c-stats tr td:last-child::before {
-      content: '⠀'
+    .stat-table tr td:last-child::before {
+      content: '\00a0'
     }
+    .aligned-stat-table tr td:last-child {
+	  min-width: calc(var(--main-width) / 7);
+	}
     </style>
   </head>
   <body>
@@ -71,6 +77,22 @@ const homeTmpl = `
           <strong>{{ .PageTitle }}</strong>
         </section>
       {{ end }}
+      <section class="right">
+        <table class="stat-table">
+          <tr>
+            <td>cpu</td>
+            <td>{{ printf "%.2f" .Stats.CPU }}% {{ printf "%.0f" .Stats.CPUTemp }}&deg;C</td>
+          </tr>
+          <tr>
+            <td>memory</td>
+            <td>{{ .Stats.MemUsed | humanBytes }} / {{ .Stats.MemTotal | humanBytes }}</td>
+          </tr>
+          <tr>
+            <td>load</td>
+            <td>{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
+          </tr>
+        </table>
+      </section>
       {{ if eq (len .Projects) 0 }}
         <section class="right">
           <i>no projects up</i>
@@ -79,7 +101,7 @@ const homeTmpl = `
         <section>
           {{ range $project, $containers := .Projects }}
           <p><strong>{{ $project }}</strong></p>
-          <table class="c-stats">
+          <table class="stat-table aligned-stat-table">
           {{ range $container := $containers }}
             {{ if $container.IsDown }}
               <tr class="red">
