@@ -36,7 +36,7 @@ const homeTmpl = `
       top: 0;
       bottom: 0;
       width: var(--main-width);
-      left: calc((100vw - var(--main-width)) / 2);
+      left: calc((100vw - var(--main-width) - var(--main-pad-size)) / 2);
       position: fixed;
       z-index: -1;
     }
