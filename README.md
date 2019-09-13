@@ -13,12 +13,11 @@ services:
   status:
     image: sentriz/compose-status
     environment:
-    - TZ
     # see the `-h` for all args. they translate to env
     # variables with a `CS_` prefix
     - CS_PAGE_TITLE=my.domain status
     - CS_CLEAN_CUTOFF=259200
-    - CS_SCAN_INTERVAL=5
+    - CS_SCAN_INTERVAL=5docker
     expose:
     - 80
     volumes:
