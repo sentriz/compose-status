@@ -18,13 +18,15 @@ services:
     # variables with a `CS_` prefix
     - CS_PAGE_TITLE=my.domain status
     - CS_CLEAN_CUTOFF=259200
+    - CS_SCAN_INTERVAL=5
     expose:
     - 80
     volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - /proc:/host_proc:ro
     - ./data:/data
 ```
 
 ### screenshot
 
-![](https://i.imgur.com/mxWclyU.png)
+![](https://i.imgur.com/I3EY3Gr.png)
