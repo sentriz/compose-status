@@ -21,6 +21,19 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
+var (
+	tempMatch = "coretemp_core[0-9]+_input"
+	tempExpr  *regexp.Regexp
+)
+
+func init() {
+	var err error
+	tempExpr, err = regexp.Compile(tempMatch)
+	if err != nil {
+		log.Fatalf("error compiling temp expr: %v\n", err)
+	}
+}
+
 type Container struct {
 	Name     string
 	Status   string
@@ -223,9 +236,8 @@ func (c *Controller) GetStats() error {
 	}
 	var tempCores int
 	var temp float64
-	const tempExpr = "coretemp_core[0-9]+_input"
 	for _, t := range temps {
-		if match, _ := regexp.MatchString(tempExpr, t.SensorKey); !match {
+		if match := tempExpr.MatchString(t.SensorKey); !match {
 			continue
 		}
 		tempCores++
