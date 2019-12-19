@@ -297,5 +297,8 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	buff.WriteTo(w)
+	_, err := buff.WriteTo(w)
+	if err != nil {
+		log.Printf("error writing response buffer: %v\n", err)
+	}
 }
