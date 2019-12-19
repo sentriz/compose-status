@@ -28,4 +28,4 @@ services:
 
 ### screenshot
 
-![](https://i.imgur.com/I3EY3Gr.png)
+![](https://i.imgur.com/o8U3qlq.png)
