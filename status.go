@@ -188,6 +188,9 @@ func (c *Controller) GetProjects() error {
 			Status:   strings.ToLower(rawTain.Status),
 			LastSeen: time.Now(),
 		}
+		if label, ok := rawTain.Labels["traefik.web.frontend.rule"]; ok {
+			tain.Link = hostFromLabel(label)
+		}
 		if label, ok := rawTain.Labels["traefik.frontend.rule"]; ok {
 			tain.Link = hostFromLabel(label)
 		}
