@@ -24,6 +24,8 @@ import (
 var (
 	tempMatch = "coretemp_core[0-9]+_input"
 	tempExpr  *regexp.Regexp
+	hostMatch = "Host:(.+?)(?:,|;|$|\b)"
+	hostExpr  *regexp.Regexp
 )
 
 func init() {
@@ -31,6 +33,10 @@ func init() {
 	tempExpr, err = regexp.Compile(tempMatch)
 	if err != nil {
 		log.Fatalf("error compiling temp expr: %v\n", err)
+	}
+	hostExpr, err = regexp.Compile(hostMatch)
+	if err != nil {
+		log.Fatalf("error compiling host expr: %v\n", err)
 	}
 }
 
@@ -152,12 +158,11 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 }
 
 func hostFromLabel(label string) string {
-	const prefix = "Host:"
-	if strings.HasPrefix(label, prefix) {
-		trimmed := strings.TrimPrefix(label, prefix)
-		return strings.SplitN(trimmed, ",", 2)[0]
+	match := hostExpr.FindStringSubmatch(label)
+	if len(match) < 2 {
+		return ""
 	}
-	return ""
+	return match[1]
 }
 
 func (c *Controller) GetProjects() error {

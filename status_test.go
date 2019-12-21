@@ -12,6 +12,7 @@ func TestHostFromLabel(t *testing.T) {
 		{"extra regex", "HostRegexp:.*", ""},
 		{"normal", "Host:what.it.do", "what.it.do"},
 		{"normal", "Host:good.morning", "good.morning"},
+		{"normal", "Host:good.morning;Path=/notifications/hub", "good.morning"},
 		{"comma", "Host:what.it.do,howdy.partner", "what.it.do"},
 		{"comma", "Host:what.it.do,howdy.partner,what", "what.it.do"},
 		{"empty", "", ""},
