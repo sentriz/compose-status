@@ -151,10 +151,10 @@ func parseLabelHost(label string) string {
 
 func parseLabelsLink(labels map[string]string) string {
 	if label, ok := labels["traefik.web.frontend.rule"]; ok {
-		return label
+		return parseLabelHost(label)
 	}
 	if label, ok := labels["traefik.frontend.rule"]; ok {
-		return label
+		return parseLabelHost(label)
 	}
 	return ""
 }
