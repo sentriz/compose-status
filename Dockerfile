@@ -1,9 +1,8 @@
 FROM golang:1.12-alpine AS builder
+RUN apk add -U --no-cache git
 WORKDIR /src
 COPY . .
-RUN \
-    apk add -U --no-cache git && \
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-w -s" -o compose-status cmd/compose-status/main.go
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-w -s" -o compose-status cmd/compose-status/main.go
 
 FROM scratch
 COPY --from=builder /src/compose-status /bin/
