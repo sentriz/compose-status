@@ -1,12 +1,10 @@
 package status
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"regexp"
-	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -21,32 +19,34 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
+const (
+	labelGroup   = "xyz.senan.compose-status.group"
+	labelProject = "com.docker.compose.project"
+	exprTempStr  = "coretemp_core[0-9]+_input"
+	exprHostStr  = "Host:(.+?)(?:,|;|$|\b)"
+)
+
 var (
-	tempMatch = "coretemp_core[0-9]+_input"
-	tempExpr  *regexp.Regexp
-	hostMatch = "Host:(.+?)(?:,|;|$|\b)"
-	hostExpr  *regexp.Regexp
+	exprTemp *regexp.Regexp
+	exprHost *regexp.Regexp
 )
 
 func init() {
 	var err error
-	tempExpr, err = regexp.Compile(tempMatch)
+	exprTemp, err = regexp.Compile(exprTempStr)
 	if err != nil {
 		log.Fatalf("error compiling temp expr: %v\n", err)
 	}
-	hostExpr, err = regexp.Compile(hostMatch)
+	exprHost, err = regexp.Compile(exprHostStr)
 	if err != nil {
 		log.Fatalf("error compiling host expr: %v\n", err)
 	}
 }
 
 type Container struct {
-	Name     string
-	Status   string
-	Link     string
-	LastSeen time.Time
-	IsDown   bool
-	Project  string
+	Name   string
+	Status string
+	Link   string
 }
 
 type Stats struct {
@@ -59,34 +59,19 @@ type Stats struct {
 	CPUTemp  float64
 }
 
-// we need some sort of unique identifier for containers (when tracking ups
-// and downs). the "ID" field from the engine won't do, because we want a
-// recreated container with probably a different ID to be considered the same
-func (c *Container) ID() string {
-	return fmt.Sprintf("%s___%s", c.Project, c.Name)
-}
-
 type Controller struct {
 	tmpl         *template.Template
 	client       *docker.Client
 	buffPool     *bpool.BufferPool
-	cleanCutoff  time.Duration
 	scanInterval time.Duration
-	groupLabel   string
 	pageTitle    string
 	showCredit   bool
-	LastProjects map[string]*Container
-	LastStats    *Stats
+	LastGroups   map[string][]string
+	LastProjects map[string][]Container
+	LastStats    Stats
 }
 
 type ControllerOpt func(*Controller) error
-
-func WithCleanCutoff(dur time.Duration) ControllerOpt {
-	return func(c *Controller) error {
-		c.cleanCutoff = dur
-		return nil
-	}
-}
 
 func WithScanInternal(dur time.Duration) ControllerOpt {
 	return func(c *Controller) error {
@@ -99,22 +84,6 @@ func WithTitle(title string) ControllerOpt {
 	return func(c *Controller) error {
 		c.pageTitle = title
 		return nil
-	}
-}
-
-func WithGroupLabel(label string) ControllerOpt {
-	return func(c *Controller) error {
-		c.groupLabel = label
-		return nil
-	}
-}
-
-func WithResume(file []byte) ControllerOpt {
-	return func(c *Controller) error {
-		if len(file) <= 0 {
-			return nil
-		}
-		return json.Unmarshal(file, &c.LastProjects)
 	}
 }
 
@@ -139,15 +108,10 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 		return nil, errors.Wrap(err, "parsing template")
 	}
 	cont := &Controller{
-		tmpl:         tmpl,
-		client:       client,
-		buffPool:     bpool.NewBufferPool(64),
-		LastProjects: map[string]*Container{},
-		LastStats:    &Stats{},
-		// defaults
-		cleanCutoff: 3 * 24 * time.Hour,
-		pageTitle:   "server status",
-		groupLabel:  "com.docker.compose.project",
+		tmpl:      tmpl,
+		client:    client,
+		buffPool:  bpool.NewBufferPool(64),
+		LastStats: Stats{},
 	}
 	for _, option := range options {
 		if err := option(cont); err != nil {
@@ -157,56 +121,62 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 	return cont, nil
 }
 
-func hostFromLabel(label string) string {
-	match := hostExpr.FindStringSubmatch(label)
+func parseLabelHost(label string) string {
+	match := exprHost.FindStringSubmatch(label)
 	if len(match) < 2 {
 		return ""
 	}
 	return match[1]
 }
 
+func parseLabelsLink(labels map[string]string) string {
+	if label, ok := labels["traefik.web.frontend.rule"]; ok {
+		return label
+	}
+	if label, ok := labels["traefik.frontend.rule"]; ok {
+		return label
+	}
+	return ""
+}
+
+func parseStatus(status string) string {
+	// TODO: remove (healthy)
+	return strings.ToLower(status)
+}
+
 func (c *Controller) GetProjects() error {
-	seenIDs := map[string]struct{}{}
-	containers, err := c.client.ListContainers(
+	responses, err := c.client.ListContainers(
 		docker.ListContainersOptions{},
 	)
 	if err != nil {
 		return errors.Wrap(err, "listing containers")
 	}
+	c.LastGroups = map[string][]string{}
+	c.LastProjects = map[string][]Container{}
+	groupedProjects := map[string]struct{}{}
 	// insert the current time for any container we see
-	for _, rawTain := range containers {
-		project, ok := rawTain.Labels[c.groupLabel]
+	for _, resp := range responses {
+		if len(resp.Names) == 0 {
+			return fmt.Errorf("%q does not have a name", resp.ID)
+		}
+		project, ok := resp.Labels[labelProject]
 		if !ok {
 			continue
 		}
-		if len(rawTain.Names) == 0 {
-			return fmt.Errorf("%q does not have a name", rawTain.ID)
+		if group, ok := resp.Labels[labelGroup]; ok {
+			c.LastGroups[group] = append(c.LastGroups[group], project)
+			groupedProjects[project] = struct{}{}
 		}
-		tain := &Container{
-			Name:     rawTain.Names[0],
-			Project:  project,
-			Status:   strings.ToLower(rawTain.Status),
-			LastSeen: time.Now(),
-		}
-		if label, ok := rawTain.Labels["traefik.web.frontend.rule"]; ok {
-			tain.Link = hostFromLabel(label)
-		}
-		if label, ok := rawTain.Labels["traefik.frontend.rule"]; ok {
-			tain.Link = hostFromLabel(label)
-		}
-		seenIDs[tain.ID()] = struct{}{}
-		c.LastProjects[tain.ID()] = tain
+		c.LastProjects[project] = append(c.LastProjects[project], Container{
+			Name:   resp.Names[0],
+			Status: parseStatus(resp.Status),
+			Link:   parseLabelsLink(resp.Labels),
+		})
 	}
-	// set containers we haven't seen to down, and delete one that haven't
-	// seen since since the cutoff
-	cutoff := time.Now().Add(-1 * c.cleanCutoff)
-	for id, tain := range c.LastProjects {
-		if tain.LastSeen.Before(cutoff) {
-			delete(c.LastProjects, id)
-			continue
-		}
-		if _, ok := seenIDs[id]; !ok {
-			tain.IsDown = true
+	for project := range c.LastProjects {
+		if _, ok := groupedProjects[project]; !ok {
+			// put the ungrouped projects into the "~" pseudo group
+			c.LastGroups["~"] = append(c.LastGroups["~"], project)
 		}
 	}
 	return nil
@@ -245,7 +215,7 @@ func (c *Controller) GetStats() error {
 	var tempCores int
 	var temp float64
 	for _, t := range temps {
-		if match := tempExpr.MatchString(t.SensorKey); !match {
+		if match := exprTemp.MatchString(t.SensorKey); !match {
 			continue
 		}
 		tempCores++
@@ -271,29 +241,17 @@ func (c *Controller) Start() {
 }
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// group the last seen by project, inserting so that the container
-	// names are sorted
-	projectMap := map[string][]*Container{}
-	for _, tain := range c.LastProjects {
-		current := projectMap[tain.Project]
-		i := sort.Search(len(current), func(i int) bool {
-			return current[i].Name >= tain.Name
-		})
-		current = append(current, nil)
-		copy(current[i+1:], current[i:])
-		current[i] = tain
-		projectMap[tain.Project] = current
-	}
-	//
 	tmplData := struct {
 		PageTitle  string
 		ShowCredit bool
-		Projects   map[string][]*Container
-		Stats      *Stats
+		Groups     map[string][]string
+		Projects   map[string][]Container
+		Stats      Stats
 	}{
 		c.pageTitle,
 		c.showCredit,
-		projectMap,
+		c.LastGroups,
+		c.LastProjects,
 		c.LastStats,
 	}
 	// using a pool of buffers, we can write to one first to catch template

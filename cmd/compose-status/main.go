@@ -1,14 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/peterbourgon/ff"
@@ -24,25 +20,13 @@ var (
 		"page-title", "server status",
 		"title to show at the top of the page (optional)",
 	)
-	argCleanCutoff = argSet.Int(
-		"clean-cutoff", 259200,
-		"(in seconds) to wait before forgetting about a down container (optional) (default 3days)",
-	)
 	argScanInterval = argSet.Int(
 		"scan-interval", 5,
 		"(in seconds) time to wait between background scans (optional)",
 	)
-	argGroupLabel = argSet.String(
-		"group-label", "com.docker.compose.project",
-		"docker label to group by (optional)",
-	)
 	argListenAddr = argSet.String(
 		"listen-addr", ":9293",
 		"listen address (optional)",
-	)
-	argSavePath = argSet.String(
-		"save-path", "save.json",
-		"path to save file (optional)",
 	)
 )
 
@@ -54,33 +38,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("error parsing args: %v\n", err)
 	}
-	save, _ := ioutil.ReadFile(*argSavePath)
 	cont, err := status.NewController(
-		status.WithCleanCutoff(time.Duration(*argCleanCutoff)*time.Second),
 		status.WithScanInternal(time.Duration(*argScanInterval)*time.Second),
-		status.WithResume(save),
 		status.WithTitle(*argPageTitle),
-		status.WithGroupLabel(*argGroupLabel),
 		status.WithCredit,
 	)
 	if err != nil {
 		log.Fatalf("error creating controller: %v\n", err)
 	}
 	go cont.Start()
-	// ensure we save to disk on SIGTERM. for example Ctrl-C
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		lastData, err := json.Marshal(cont.LastProjects)
-		if err != nil {
-			log.Fatalf("error marshalling last to json: %v\n", err)
-		}
-		if err := ioutil.WriteFile(*argSavePath, lastData, 0644); err != nil {
-			log.Fatalf("error saving last to disk: %v\n", err)
-		}
-		os.Exit(0)
-	}()
 	http.Handle("/", cont)
 	log.Printf("listening on %q\n", *argListenAddr)
 	if err := http.ListenAndServe(*argListenAddr, nil); err != nil {

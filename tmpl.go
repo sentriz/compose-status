@@ -3,122 +3,146 @@
 package status
 
 const homeTmpl = `
-  <!doctype html>
-  <html>
-  <head>
-    <link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAD/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAD6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAA+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAADwAAAA8AAAAPAAAAD/wAAA/8AAAP/AAAD/wAAA/8AAAA==" rel="icon" type="image/x-icon" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>{{ .PageTitle }}</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-      }
-      body {
-        background-color: #fffce0;
-        max-width: 500px;
-        margin: 0 auto;
-        font-family: monospace;
-      }
-      body > * {
-        margin: 10px;
-      }
-      a {
-        color: unset;
-      }
-      .right {
-        text-align: right;
-      }
-      .light {
-        opacity: 0.3;
-      }
-      .red {
-        color: red;
-      }
-      .green {
-        color: green;
-      }
-      .stat-table {
-        margin-left: auto;
-        text-align: right;
-      }
-      .stat-table tr td:last-child {
-        font-weight: bold;
-      }
-      .stat-table tr td:last-child::before {
-        content: '\00a0';
-      }
-      section {
-        display: flex;
-        background-color: white;
-        opacity: 0.8;
-        padding: 10px;
-        box-shadow: 0 4px 4px 0 rgba(0, 0, 0, 0.05);
-        transition: 0.3s;
-        border-radius: 4px;
-      }
-      p {
-        font-style: italic;
-      }
-    </style>
-  </head>
-  <body>
-    <section>
-      {{ if not (eq .PageTitle "") }}
+<!doctype html>
+<html>
+<head>
+  <link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAD/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAD6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAA+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAADwAAAA8AAAAPAAAAD/wAAA/8AAAP/AAAD/wAAA/8AAAA==" rel="icon" type="image/x-icon" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta http-equiv="refresh" content="4" />
+  <title>{{ .PageTitle }}</title>
+  <style>
+    :root {
+      --group-header-width: 18px;
+      --group-header-colour: #ddd;
+      --section-radius: 4px;
+      --colour-main: #FFF59D;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 500px;
+      font-family: monospace;
+    }
+    a {
+      color: unset;
+    }
+    p {
+      font-style: italic;
+    }
+    .right {
+      text-align: right;
+    }
+    .light {
+      opacity: 0.3;
+    }
+    .red {
+      color: red;
+    }
+    .green {
+      color: #388E3C;
+    }
+    .stat-table {
+      margin-left: auto;
+      text-align: right;
+    }
+    .stat-table tr td:last-child {
+      font-weight: bold;
+    }
+    .stat-table tr td:last-child::before {
+      content: '\00a0';
+    }
+    .group {
+      margin: 12px 0;
+    }
+    .group.group-show .group-title {
+      border: 1px #ccc;
+      background-color: var(--colour-main);
+      filter: brightness(125%);
+      color: #444;
+      border-bottom: 1px solid #888;
+    }
+    .group-items {
+      background-color: var(--colour-main);
+    }
+    .group-title,
+    .group-items {
+      padding: 0 16px;
+    }
+    .project {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .project~.project {
+      border-top: 1px solid white;
+    }
+  </style>
+</head>
+{{ $rootProjects := .Projects }} 
+{{ $rootGroups := .Groups }} 
+<body>
+  <div class="group">
+    <div class="group-title"></div>
+    <div class="group-items">
+      <div class="project">
+        {{ if not (eq .PageTitle "") }}
         <strong>{{ .PageTitle }}</strong>
-      {{ end }}
-      <table class="stat-table">
-        <tr>
-          <td>cpu</td>
-          <td>{{ printf "%.2f" .Stats.CPU }}% {{ printf "%.0f" .Stats.CPUTemp }}&deg;C</td>
-        </tr>
-        <tr>
-          <td>memory</td>
-          <td>{{ .Stats.MemUsed | humanBytes }} / {{ .Stats.MemTotal | humanBytes }}</td>
-        </tr>
-        <tr>
-          <td>load</td>
-          <td>{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
-        </tr>
-      </table>
-    </section>
-    {{ if eq (len .Projects) 0 }}
-    <section class="right">
-      <i>no projects up</i>
-    </section>
-    {{ else }}
-    {{ range $project, $containers := .Projects }}
-    <section>
-      <p><strong>{{ $project }}</strong></p>
-      <table class="stat-table aligned-stat-table">
-      {{ range $container := $containers }}
-        {{ if $container.IsDown }}
-          <tr class="red">
-        {{ else }}
+        {{ end }}
+        <table class="stat-table">
+          <tr>
+            <td>cpu</td>
+            <td>{{ printf "%.2f" .Stats.CPU }}% {{ printf "%.0f" .Stats.CPUTemp }}&deg;C</td>
+          </tr>
+          <tr>
+            <td>memory</td>
+            <td>{{ .Stats.MemUsed | humanBytes }} / {{ .Stats.MemTotal | humanBytes }}</td>
+          </tr>
+          <tr>
+            <td>load</td>
+            <td>{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  {{ range $group, $projects := $rootGroups }}
+  <div class="group {{ if not (eq $group "~") }}group-show{{ end }}">
+    <div class="group-title">
+      {{ if not (eq $group "~") }}<h4>{{ $group }}</h4>{{ end }}
+    </div>
+    <div class="group-items">
+      {{ range $projectName := $projects }}
+      <div class="project">
+        <p><strong>{{ $projectName }}</strong></p>
+        <table class="stat-table aligned-stat-table">
+          {{ $project := index $rootProjects $projectName }}
+          {{ range $container := $project }}
           <tr class="green">
-        {{ end }}
-        {{ if not (eq $container.Link "") }}
-          <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
-        {{ else }}
-          <td>{{ $container.Name }}</td>
-        {{ end }}
-        {{ if $container.IsDown }}
-          <td>last seen {{ $container.LastSeen | humanDate }}</td>
-        {{ else }}
-          <td>{{ $container.Status }}</td>
-        {{ end }}
-        </tr>
+            <td>
+              {{ if not (eq $container.Link "") }}
+                <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
+              {{ else }}
+                <td>{{ $container.Name }}</td>
+              {{ end }}
+            </td>
+            <td>{{ $container.Status }}</td>
+          </tr>
+          {{ end }}
+        </table>
+      </div>
       {{ end }}
-      </table>
-    </section>
-    {{ end }}
-    {{ end }}
-    {{ if .ShowCredit }}
-    <div class="right light">
+    </div>
+  </div>
+  {{ end }}
+  {{ if .ShowCredit }}
+  <div class="group">
+    <div class="group-items light right">
       <i><a target="_blank" href="https://github.com/sentriz/compose-status">compose status</a></i>
     </div>
-    {{ end }}
-    </div>
-  </body>
-  </html>
+  </div>
+  {{ end }}
+</body>
+</html>
 `
