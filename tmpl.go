@@ -8,7 +8,9 @@ const homeTmpl = `
 <head>
   <link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAD/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqb/4QAm/+EAJv/hACb/4QAm/rAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966m/+EAJv/hACb/4QAm/+EAJv6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupv/hACb/4QAm/+EAJv/hACb+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAD6wIKb+sCCm/rAgpv6wIKb+sCCm/rAgpv/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAA+sCCm/rAgpv6wIKb+sCCm/rAgpv6wIKb/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAPrAgpv6wIKb+sCCm/rAgpv6wIKb+sCCm//eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/eupv/3rqb/966m//eupv/3rqb/966mwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/3rqb/966m//eupv/3rqb/966m//eupsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/966m//eupv/3rqb/966m//eupv/3rqbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAADwAAAA8AAAAPAAAAD/wAAA/8AAAP/AAAD/wAAA/8AAAA==" rel="icon" type="image/x-icon" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <meta http-equiv="refresh" content="4" />
+  <meta http-equiv="refresh" content="10" />
+  <!-- TODO: bundle this -->
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.bundle.min.js"></script>
   <title>{{ .PageTitle }}</title>
   <style>
     :root {
@@ -107,6 +109,12 @@ const homeTmpl = `
       </div>
     </div>
   </div>
+  <div class="group" id="chart-group">
+    <div class="group-title"></div>
+    <div class="group-items">
+      <canvas id="chart" height="100"></canvas>
+    </div>
+  </div>
   {{ range $group, $projects := $rootGroups }}
   <div class="group {{ if not (eq $group "~") }}group-show{{ end }}">
     <div class="group-title">
@@ -143,6 +151,71 @@ const homeTmpl = `
     </div>
   </div>
   {{ end }}
+  <noscript>
+    <style>
+      #chart-group {
+        display: none;
+      }
+    </style>
+  </noscript>
+  <script>
+    const elem = document.getElementById('chart');
+    const ctx = elem.getContext('2d');
+    const dy = {{ js .HistData }};
+    const dx = [];
+    const base = new Date().getTime();
+    for (var i = 0; i < {{ js (len .HistData) }}; i++) {
+      dx.unshift(new Date(base - ({{ js .HistPeriod.Milliseconds }} * i)));
+    }
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dx,
+        datasets: [{
+          data: dy,
+          pointRadius: 0,
+          fill: false,
+          borderColor: "grey",
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        legend: {
+          display: false
+        },
+        layout: {},
+        scales: {
+          xAxes: [{
+            type: 'time',
+            gridLines: {
+              display: false
+            },
+            ticks: {
+              maxRotation: 90,
+              minRotation: 90
+            },
+            time: {
+              unit: 'second',
+              unitStepSize: 5,
+              displayFormats: {
+                'second': 'HH:mm',
+              }
+            }
+          }],
+          yAxes: [{
+            ticks: {
+              beginAtZero: true,
+              max: 100,
+              display: false
+            },
+            gridLines: {
+              drawBorder: false,
+            }
+          }]
+        }
+      }
+    });
+  </script>
 </body>
 </html>
 `

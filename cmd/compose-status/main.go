@@ -24,6 +24,10 @@ var (
 		"scan-interval", 5,
 		"(in seconds) time to wait between background scans (optional)",
 	)
+	argHistWindow = argSet.Int(
+		"hist-window", 1800,
+		"(in seconds) time window for history graphic (optional)",
+	)
 	argListenAddr = argSet.String(
 		"listen-addr", ":9293",
 		"listen address (optional)",
@@ -39,8 +43,9 @@ func main() {
 		log.Fatalf("error parsing args: %v\n", err)
 	}
 	cont, err := status.NewController(
-		status.WithScanInternal(time.Duration(*argScanInterval)*time.Second),
 		status.WithTitle(*argPageTitle),
+		status.WithScanInternal(time.Duration(*argScanInterval)*time.Second),
+		status.WithHistWindow(time.Duration(*argHistWindow)*time.Second),
 		status.WithCredit,
 	)
 	if err != nil {

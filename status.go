@@ -1,12 +1,13 @@
 package status
 
 import (
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -59,6 +60,13 @@ type Stats struct {
 	CPUTemp  float64
 }
 
+type hist []float64
+
+func (h *hist) add(n float64) {
+	*h = append(*h, n)
+	*h = (*h)[1:len(*h)]
+}
+
 type Controller struct {
 	tmpl         *template.Template
 	client       *docker.Client
@@ -66,12 +74,20 @@ type Controller struct {
 	scanInterval time.Duration
 	pageTitle    string
 	showCredit   bool
-	LastGroups   map[string][]string
-	LastProjects map[string][]Container
-	LastStats    Stats
+	lastGroups   map[string][]string
+	lastProjects map[string][]Container
+	lastStats    Stats
+	cpuHist      hist
 }
 
 type ControllerOpt func(*Controller) error
+
+func WithTitle(title string) ControllerOpt {
+	return func(c *Controller) error {
+		c.pageTitle = title
+		return nil
+	}
+}
 
 func WithScanInternal(dur time.Duration) ControllerOpt {
 	return func(c *Controller) error {
@@ -80,9 +96,9 @@ func WithScanInternal(dur time.Duration) ControllerOpt {
 	}
 }
 
-func WithTitle(title string) ControllerOpt {
+func WithHistWindow(dur time.Duration) ControllerOpt {
 	return func(c *Controller) error {
-		c.pageTitle = title
+		c.cpuHist = hist(make([]float64, dur/c.scanInterval))
 		return nil
 	}
 }
@@ -102,6 +118,10 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 		Funcs(template.FuncMap{
 			"humanDate":  humanize.Time,
 			"humanBytes": humanize.Bytes,
+			"js": func(v interface{}) template.JS {
+				out, _ := json.Marshal(v)
+				return template.JS(out)
+			},
 		}).
 		Parse(homeTmpl)
 	if err != nil {
@@ -111,7 +131,7 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 		tmpl:      tmpl,
 		client:    client,
 		buffPool:  bpool.NewBufferPool(64),
-		LastStats: Stats{},
+		lastStats: Stats{},
 	}
 	for _, option := range options {
 		if err := option(cont); err != nil {
@@ -144,6 +164,22 @@ func parseStatus(status string) string {
 	return strings.ToLower(status)
 }
 
+func averageTemp(cores []host.TemperatureStat) float64 {
+	var coreNo int
+	var temp float64
+	for _, t := range cores {
+		if match := exprTemp.MatchString(t.SensorKey); !match {
+			continue
+		}
+		coreNo++
+		temp += t.Temperature
+	}
+	if coreNo == 0 {
+		return 0
+	}
+	return temp / float64(coreNo)
+}
+
 func (c *Controller) GetProjects() error {
 	responses, err := c.client.ListContainers(
 		docker.ListContainersOptions{},
@@ -151,8 +187,8 @@ func (c *Controller) GetProjects() error {
 	if err != nil {
 		return errors.Wrap(err, "listing containers")
 	}
-	c.LastGroups = map[string][]string{}
-	c.LastProjects = map[string][]Container{}
+	c.lastGroups = map[string][]string{}
+	c.lastProjects = map[string][]Container{}
 	groupedProjects := map[string]struct{}{}
 	// insert the current time for any container we see
 	for _, resp := range responses {
@@ -164,19 +200,19 @@ func (c *Controller) GetProjects() error {
 			continue
 		}
 		if group, ok := resp.Labels[labelGroup]; ok {
-			c.LastGroups[group] = append(c.LastGroups[group], project)
+			c.lastGroups[group] = append(c.lastGroups[group], project)
 			groupedProjects[project] = struct{}{}
 		}
-		c.LastProjects[project] = append(c.LastProjects[project], Container{
+		c.lastProjects[project] = append(c.lastProjects[project], Container{
 			Name:   resp.Names[0],
 			Status: parseStatus(resp.Status),
 			Link:   parseLabelsLink(resp.Labels),
 		})
 	}
-	for project := range c.LastProjects {
+	for project := range c.lastProjects {
 		if _, ok := groupedProjects[project]; !ok {
 			// put the ungrouped projects into the "~" pseudo group
-			c.LastGroups["~"] = append(c.LastGroups["~"], project)
+			c.lastGroups["~"] = append(c.lastGroups["~"], project)
 		}
 	}
 	return nil
@@ -188,43 +224,29 @@ func (c *Controller) GetStats() error {
 	if err != nil {
 		return errors.Wrap(err, "get load stat")
 	}
-	c.LastStats.Load1 = loadStat.Load1
-	c.LastStats.Load5 = loadStat.Load5
-	c.LastStats.Load15 = loadStat.Load15
+	c.lastStats.Load1 = loadStat.Load1
+	c.lastStats.Load5 = loadStat.Load5
+	c.lastStats.Load15 = loadStat.Load15
 	// begin mem
 	memStat, err := mem.VirtualMemory()
 	if err != nil {
 		return errors.Wrap(err, "get mem stat")
 	}
-	c.LastStats.MemUsed = memStat.Used
-	c.LastStats.MemTotal = memStat.Total
+	c.lastStats.MemUsed = memStat.Used
+	c.lastStats.MemTotal = memStat.Total
 	// begin cpu
-	percent, err := cpu.Percent(5*time.Second, false)
+	percent, err := cpu.Percent(0, false)
 	if err != nil {
 		return errors.Wrap(err, "get cpu stat")
 	}
-	if len(percent) != 1 {
-		return fmt.Errorf("invalid cpu response")
-	}
-	c.LastStats.CPU = percent[0]
+	c.lastStats.CPU = percent[0]
+	c.cpuHist.add(percent[0])
 	// begin cpu temp
 	temps, err := host.SensorsTemperatures()
 	if err != nil {
 		return errors.Wrap(err, "get temp stat")
 	}
-	var tempCores int
-	var temp float64
-	for _, t := range temps {
-		if match := exprTemp.MatchString(t.SensorKey); !match {
-			continue
-		}
-		tempCores++
-		temp += t.Temperature
-	}
-	if tempCores == 0 {
-		return nil
-	}
-	c.LastStats.CPUTemp = temp / float64(tempCores)
+	c.lastStats.CPUTemp = averageTemp(temps)
 	return nil
 }
 
@@ -247,12 +269,16 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Groups     map[string][]string
 		Projects   map[string][]Container
 		Stats      Stats
+		HistData   []float64
+		HistPeriod time.Duration
 	}{
 		c.pageTitle,
 		c.showCredit,
-		c.LastGroups,
-		c.LastProjects,
-		c.LastStats,
+		c.lastGroups,
+		c.lastProjects,
+		c.lastStats,
+		c.cpuHist,
+		c.scanInterval,
 	}
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer
@@ -263,8 +289,7 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, err := buff.WriteTo(w)
-	if err != nil {
+	if _, err := buff.WriteTo(w); err != nil {
 		log.Printf("error writing response buffer: %v\n", err)
 	}
 }
