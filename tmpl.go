@@ -17,7 +17,7 @@ const homeTmpl = `
       --group-header-width: 18px;
       --group-header-colour: #ddd;
       --section-radius: 4px;
-      --colour-main: #FFF59D;
+      --colour-main: #FCF5B5;
     }
     * {
       margin: 0;
