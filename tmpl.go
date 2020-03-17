@@ -128,13 +128,11 @@ const homeTmpl = `
           {{ $project := index $rootProjects $projectName }}
           {{ range $container := $project }}
           <tr class="green">
-            <td>
-              {{ if not (eq $container.Link "") }}
-                <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
-              {{ else }}
-                <td>{{ $container.Name }}</td>
-              {{ end }}
-            </td>
+            {{ if not (eq $container.Link "") }}
+              <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
+            {{ else }}
+              <td>{{ $container.Name }}</td>
+            {{ end }}
             <td>{{ $container.Status }}</td>
           </tr>
           {{ end }}
@@ -180,6 +178,7 @@ const homeTmpl = `
         }]
       },
       options: {
+        animation: false,
         legend: {
           display: false
         },
