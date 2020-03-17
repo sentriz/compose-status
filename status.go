@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -279,6 +280,9 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.lastStats,
 		c.cpuHist,
 		c.scanInterval,
+	}
+	for _, projects := range tmplData.Groups {
+		sort.Strings(projects)
 	}
 	// using a pool of buffers, we can write to one first to catch template
 	// errors, which avoids a superfluous write to the response writer
