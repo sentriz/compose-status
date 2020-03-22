@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
 	"sort"
@@ -220,7 +221,7 @@ func (c *Controller) GetProjects() error {
 }
 
 func (c *Controller) GetStats() error {
-	// begin load
+	// ** begin load
 	loadStat, err := load.Avg()
 	if err != nil {
 		return errors.Wrap(err, "get load stat")
@@ -228,21 +229,22 @@ func (c *Controller) GetStats() error {
 	c.lastStats.Load1 = loadStat.Load1
 	c.lastStats.Load5 = loadStat.Load5
 	c.lastStats.Load15 = loadStat.Load15
-	// begin mem
+	// ** begin mem
 	memStat, err := mem.VirtualMemory()
 	if err != nil {
 		return errors.Wrap(err, "get mem stat")
 	}
 	c.lastStats.MemUsed = memStat.Used
 	c.lastStats.MemTotal = memStat.Total
-	// begin cpu
+	// ** begin cpu
 	percent, err := cpu.Percent(0, false)
 	if err != nil {
 		return errors.Wrap(err, "get cpu stat")
 	}
-	c.lastStats.CPU = percent[0]
-	c.cpuHist.add(percent[0])
-	// begin cpu temp
+	percentRound := math.Round(percent[0]*100) / 100
+	c.lastStats.CPU = percentRound
+	c.cpuHist.add(percentRound)
+	// ** begin cpu temp
 	temps, err := host.SensorsTemperatures()
 	if err != nil {
 		return errors.Wrap(err, "get temp stat")
