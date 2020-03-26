@@ -24,7 +24,7 @@ import (
 
 const (
 	exprTempStr = "coretemp_core[0-9]+_input"
-	exprHostStr = "Host(?::|\\(\\`)([a-z\\.]+)"
+	exprHostStr = "Host(?::|\\(\\`)([a-z\\.-]+)"
 	// host prefix & suffix. slightly stupid but needs to support:
 	// traefik v1 `traefik.frontend.rule`
 	// traefik v1 `traefik.<name>.frontend.rule`
