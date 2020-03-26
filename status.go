@@ -23,10 +23,16 @@ import (
 )
 
 const (
-	labelGroup   = "xyz.senan.compose-status.group"
-	labelProject = "com.docker.compose.project"
-	exprTempStr  = "coretemp_core[0-9]+_input"
-	exprHostStr  = "Host:(.+?)(?:,|;|$|\b)"
+	exprTempStr = "coretemp_core[0-9]+_input"
+	exprHostStr = "Host(?::|\\(\\`)([a-z\\.]+)"
+	// host prefix & suffix. slightly stupid but needs to support:
+	// traefik v1 `traefik.frontend.rule`
+	// traefik v1 `traefik.<name>.frontend.rule`
+	// traefik v2 `traefik.http.routers.<name>.rule`
+	labelHostPrefix = "traefik."
+	labelHostSuffix = ".rule"
+	labelGroup      = "xyz.senan.compose-status.group"
+	labelProject    = "com.docker.compose.project"
 )
 
 var (
@@ -152,17 +158,18 @@ func parseLabelHost(label string) string {
 }
 
 func parseLabelsLink(labels map[string]string) string {
-	if label, ok := labels["traefik.web.frontend.rule"]; ok {
-		return parseLabelHost(label)
-	}
-	if label, ok := labels["traefik.frontend.rule"]; ok {
-		return parseLabelHost(label)
+	for k, v := range labels {
+		prefix := strings.HasPrefix(k, labelHostPrefix)
+		suffix := strings.HasSuffix(k, labelHostSuffix)
+		if prefix && suffix {
+			return parseLabelHost(v)
+		}
 	}
 	return ""
 }
 
 func parseStatus(status string) string {
-	// TODO: remove (healthy)
+	// TODO: remove "(healthy)" er put it elsewhere
 	return strings.ToLower(status)
 }
 

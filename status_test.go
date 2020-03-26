@@ -8,13 +8,15 @@ func TestHostFromLabel(t *testing.T) {
 		label string
 		exp   string
 	}{
-		{"extra regex", "HostRegexp:{catchall:.*}", ""},
-		{"extra regex", "HostRegexp:.*", ""},
-		{"normal", "Host:what.it.do", "what.it.do"},
-		{"normal", "Host:good.morning", "good.morning"},
-		{"normal", "Host:good.morning;Path=/notifications/hub", "good.morning"},
-		{"comma", "Host:what.it.do,howdy.partner", "what.it.do"},
-		{"comma", "Host:what.it.do,howdy.partner,what", "what.it.do"},
+		{"v1 extra regex", "HostRegexp:{catchall:.*}", ""},
+		{"v1 extra regex", "HostRegexp:.*", ""},
+		{"v1 normal", "Host:what.it.do", "what.it.do"},
+		{"v1 normal", "Host:good.morning", "good.morning"},
+		{"v1 normal", "Host:good.morning;Path=/notifications/hub", "good.morning"},
+		{"v1 comma", "Host:what.it.do,howdy.partner", "what.it.do"},
+		{"v1 comma", "Host:what.it.do,howdy.partner,what", "what.it.do"},
+		{"v2 normal", "Host(`what.it.do`)", "what.it.do"},
+		{"v2 operator", "Path(`/path`) || Host(`what.it.do`)", "what.it.do"},
 		{"empty", "", ""},
 	}
 	for _, tc := range cases {
