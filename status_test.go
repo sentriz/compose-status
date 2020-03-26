@@ -19,7 +19,7 @@ func TestHostFromLabel(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			actu := hostFromLabel(tc.label)
+			actu := parseLabelHost(tc.label)
 			if actu != tc.exp {
 				t.Errorf("expected %q, got %q", tc.exp, actu)
 			}
