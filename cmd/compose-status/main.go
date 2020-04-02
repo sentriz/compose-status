@@ -9,7 +9,7 @@ import (
 
 	"github.com/peterbourgon/ff"
 
-	status "senan.xyz/g/compose-status"
+	status "go.senan.xyz/compose-status"
 )
 
 var (

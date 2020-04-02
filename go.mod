@@ -1,4 +1,4 @@
-module senan.xyz/g/compose-status
+module go.senan.xyz/compose-status
 
 go 1.14
 
