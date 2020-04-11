@@ -16,6 +16,7 @@ func TestHostFromLabel(t *testing.T) {
 		{"v1 comma", "Host:what.it.do,howdy.partner", "what.it.do"},
 		{"v1 comma", "Host:what.it.do,howdy.partner,what", "what.it.do"},
 		{"v2 normal", "Host(`what.it.do`)", "what.it.do"},
+		{"v2 number", "Host(`mp3.mixtape.fam`)", "mp3.mixtape.fam"},
 		{"v2 operator", "Path(`/path`) || Host(`what.it.do`)", "what.it.do"},
 		{"v2 with hyphen", "Path(`/path`) || Host(`what-dev.it.do`)", "what-dev.it.do"},
 		{"empty", "", ""},
