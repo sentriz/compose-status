@@ -159,28 +159,50 @@ const homeTmpl = `
   <script>
     const elem = document.getElementById('chart');
     const ctx = elem.getContext('2d');
-    const dy = {{ js .HistData }};
+    const cpuDY = {{ js .HistDataCPU }};
+    const tempDY = {{ js .HistDataTemp }};
     const dx = [];
     const base = new Date().getTime();
-    for (var i = 0; i < {{ js (len .HistData) }}; i++) {
+    for (var i = 0; i < {{ js (len .HistDataCPU) }}; i++) {
       dx.unshift(new Date(base - ({{ js .HistPeriod.Milliseconds }} * i)));
     }
+    const labelFuncs = [
+      // can't use backticks here in go template
+      (item, data) => "cpu: " + item.value + "%",
+      (item, data) => "temperature: " + item.value + "°C",
+    ];
     const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: dx,
-        datasets: [{
-          data: dy,
-          pointRadius: 0,
-          fill: false,
-          borderColor: "grey",
-          borderWidth: 2,
-        }]
+        datasets: [
+          {
+            data: cpuDY,
+            pointRadius: 0,
+            fill: false,
+            borderColor: 'grey',
+            borderWidth: 2,
+          },
+          {
+            data: tempDY,
+            pointRadius: 0,
+            fill: false,
+            borderColor: 'orange',
+            borderWidth: 2,
+          },
+        ]
       },
       options: {
         animation: false,
         legend: {
           display: false
+        },
+        tooltips: {
+          callbacks: {
+            label(item, data) {
+              return labelFuncs[item.datasetIndex](item, data);
+            }
+          }
         },
         layout: {},
         scales: {

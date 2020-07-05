@@ -85,7 +85,8 @@ type Controller struct {
 	lastGroups   map[string][]string
 	lastProjects map[string][]Container
 	lastStats    Stats
-	cpuHist      hist
+	histCPU      hist
+	histTemp     hist
 }
 
 type ControllerOpt func(*Controller) error
@@ -106,7 +107,8 @@ func WithScanInternal(dur time.Duration) ControllerOpt {
 
 func WithHistWindow(dur time.Duration) ControllerOpt {
 	return func(c *Controller) error {
-		c.cpuHist = hist(make([]float64, dur/c.scanInterval))
+		c.histCPU = hist(make([]float64, dur/c.scanInterval))
+		c.histTemp = hist(make([]float64, dur/c.scanInterval))
 		return nil
 	}
 }
@@ -174,19 +176,18 @@ func parseStatus(status string) string {
 }
 
 func averageTemp(cores []host.TemperatureStat) float64 {
-	var coreNo int
+	var numCores int
 	var temp float64
 	for _, t := range cores {
-		if match := exprTemp.MatchString(t.SensorKey); !match {
-			continue
+		if match := exprTemp.MatchString(t.SensorKey); match {
+			numCores++
+			temp += t.Temperature
 		}
-		coreNo++
-		temp += t.Temperature
 	}
-	if coreNo == 0 {
+	if numCores == 0 {
 		return 0
 	}
-	return temp / float64(coreNo)
+	return temp / float64(numCores)
 }
 
 func (c *Controller) GetProjects() error {
@@ -228,35 +229,27 @@ func (c *Controller) GetProjects() error {
 }
 
 func (c *Controller) GetStats() error {
-	// ** begin load
-	loadStat, err := load.Avg()
-	if err != nil {
-		return fmt.Errorf("get load stat: %w", err)
+	// not checking errors here becuase some of these return lists of
+	// warnings which i don't care about at the moment
+	if load, _ := load.Avg(); load != nil {
+		c.lastStats.Load1 = load.Load1
+		c.lastStats.Load5 = load.Load5
+		c.lastStats.Load15 = load.Load15
 	}
-	c.lastStats.Load1 = loadStat.Load1
-	c.lastStats.Load5 = loadStat.Load5
-	c.lastStats.Load15 = loadStat.Load15
-	// ** begin mem
-	memStat, err := mem.VirtualMemory()
-	if err != nil {
-		return fmt.Errorf("get mem stat: %w", err)
+	if memory, _ := mem.VirtualMemory(); memory != nil {
+		c.lastStats.MemUsed = memory.Used
+		c.lastStats.MemTotal = memory.Total
 	}
-	c.lastStats.MemUsed = memStat.Used
-	c.lastStats.MemTotal = memStat.Total
-	// ** begin cpu
-	percent, err := cpu.Percent(0, false)
-	if err != nil {
-		return fmt.Errorf("get cpu stat: %w", err)
+	if cpus, _ := cpu.Percent(0, false); len(cpus) > 0 {
+		round := math.Round(cpus[0]*100) / 100
+		c.lastStats.CPU = round
+		c.histCPU.add(round)
 	}
-	percentRound := math.Round(percent[0]*100) / 100
-	c.lastStats.CPU = percentRound
-	c.cpuHist.add(percentRound)
-	// ** begin cpu temp
-	temps, err := host.SensorsTemperatures()
-	if err != nil {
-		return fmt.Errorf("get temp stat: %w", err)
+	if temps, _ := host.SensorsTemperatures(); len(temps) > 0 {
+		avg := averageTemp(temps)
+		c.lastStats.CPUTemp = avg
+		c.histTemp.add(avg)
 	}
-	c.lastStats.CPUTemp = averageTemp(temps)
 	return nil
 }
 
@@ -274,20 +267,22 @@ func (c *Controller) Start() {
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tmplData := struct {
-		PageTitle  string
-		ShowCredit bool
-		Groups     map[string][]string
-		Projects   map[string][]Container
-		Stats      Stats
-		HistData   []float64
-		HistPeriod time.Duration
+		PageTitle    string
+		ShowCredit   bool
+		Groups       map[string][]string
+		Projects     map[string][]Container
+		Stats        Stats
+		HistDataCPU  []float64
+		HistDataTemp []float64
+		HistPeriod   time.Duration
 	}{
 		c.pageTitle,
 		c.showCredit,
 		c.lastGroups,
 		c.lastProjects,
 		c.lastStats,
-		c.cpuHist,
+		c.histCPU,
+		c.histTemp,
 		c.scanInterval,
 	}
 	for _, projects := range tmplData.Groups {
