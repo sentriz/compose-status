@@ -15,7 +15,7 @@ import (
 	"github.com/dustin/go-humanize"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/oxtoacart/bpool"
-	"github.com/pkg/errors"
+
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
@@ -119,7 +119,7 @@ func WithCredit(c *Controller) error {
 func NewController(options ...ControllerOpt) (*Controller, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
-		return nil, errors.Wrap(err, "creating docker client")
+		return nil, fmt.Errorf("creating docker client: %w", err)
 	}
 	tmpl, err := template.
 		New("").
@@ -133,7 +133,7 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 		}).
 		Parse(homeTmpl)
 	if err != nil {
-		return nil, errors.Wrap(err, "parsing template")
+		return nil, fmt.Errorf("parsing template: %w", err)
 	}
 	cont := &Controller{
 		tmpl:      tmpl,
@@ -143,7 +143,7 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 	}
 	for _, option := range options {
 		if err := option(cont); err != nil {
-			return nil, errors.Wrap(err, "running option")
+			return nil, fmt.Errorf("running option: %w", err)
 		}
 	}
 	return cont, nil
@@ -194,7 +194,7 @@ func (c *Controller) GetProjects() error {
 		docker.ListContainersOptions{},
 	)
 	if err != nil {
-		return errors.Wrap(err, "listing containers")
+		return fmt.Errorf("listing containers: %w", err)
 	}
 	c.lastGroups = map[string][]string{}
 	c.lastProjects = map[string][]Container{}
@@ -231,7 +231,7 @@ func (c *Controller) GetStats() error {
 	// ** begin load
 	loadStat, err := load.Avg()
 	if err != nil {
-		return errors.Wrap(err, "get load stat")
+		return fmt.Errorf("get load stat: %w", err)
 	}
 	c.lastStats.Load1 = loadStat.Load1
 	c.lastStats.Load5 = loadStat.Load5
@@ -239,14 +239,14 @@ func (c *Controller) GetStats() error {
 	// ** begin mem
 	memStat, err := mem.VirtualMemory()
 	if err != nil {
-		return errors.Wrap(err, "get mem stat")
+		return fmt.Errorf("get mem stat: %w", err)
 	}
 	c.lastStats.MemUsed = memStat.Used
 	c.lastStats.MemTotal = memStat.Total
 	// ** begin cpu
 	percent, err := cpu.Percent(0, false)
 	if err != nil {
-		return errors.Wrap(err, "get cpu stat")
+		return fmt.Errorf("get cpu stat: %w", err)
 	}
 	percentRound := math.Round(percent[0]*100) / 100
 	c.lastStats.CPU = percentRound
@@ -254,7 +254,7 @@ func (c *Controller) GetStats() error {
 	// ** begin cpu temp
 	temps, err := host.SensorsTemperatures()
 	if err != nil {
-		return errors.Wrap(err, "get temp stat")
+		return fmt.Errorf("get temp stat: %w", err)
 	}
 	c.lastStats.CPUTemp = averageTemp(temps)
 	return nil

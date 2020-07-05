@@ -1,6 +1,8 @@
 package status
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestHostFromLabel(t *testing.T) {
 	cases := []struct {
