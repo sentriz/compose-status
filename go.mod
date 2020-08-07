@@ -4,15 +4,17 @@ go 1.14
 
 require (
 	github.com/Microsoft/hcsshim v0.8.9 // indirect
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/containerd/containerd v1.3.6 // indirect
 	github.com/containerd/continuity v0.0.0-20200704040820-cf53015a8bae // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fsouza/go-dockerclient v1.6.5
+	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c
 	github.com/peterbourgon/ff v1.2.0
-	github.com/pkg/errors v0.9.1
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/shirou/gopsutil v2.20.6+incompatible
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
