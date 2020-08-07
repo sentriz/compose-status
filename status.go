@@ -127,7 +127,7 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 		New("").
 		Funcs(template.FuncMap{
 			"humanDate":  humanize.Time,
-			"humanBytes": humanize.Bytes,
+			"humanBytes": humanize.IBytes,
 			"js": func(v interface{}) template.JS {
 				out, _ := json.Marshal(v)
 				return template.JS(out)
