@@ -105,6 +105,10 @@ const homeTmpl = `
             <td>load</td>
             <td>{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
           </tr>
+          <tr>
+            <td>uptime</td>
+            <td>{{ .Stats.Uptime | humanDuration }}</td>
+          </tr>
         </table>
       </div>
     </div>

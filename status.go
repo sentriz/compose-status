@@ -52,6 +52,27 @@ func init() {
 	}
 }
 
+var funcMap = template.FuncMap{
+	"humanDate":  humanize.Time,
+	"humanBytes": humanize.IBytes,
+	"humanDuration": func(d time.Duration) string {
+		switch {
+		case d.Seconds() < 60:
+			return fmt.Sprintf("%.0f seconds", d.Seconds())
+		case d.Minutes() < 60:
+			return fmt.Sprintf("%.0f minutes", d.Minutes())
+		case d.Hours() < 24:
+			return fmt.Sprintf("%.0f hours", d.Hours())
+		default:
+			return fmt.Sprintf("%.0f days", d.Hours()/24)
+		}
+	},
+	"js": func(v interface{}) template.JS {
+		out, _ := json.Marshal(v)
+		return template.JS(out)
+	},
+}
+
 type Container struct {
 	Name   string
 	Status string
@@ -66,6 +87,7 @@ type Stats struct {
 	MemTotal uint64
 	CPU      float64
 	CPUTemp  float64
+	Uptime   time.Duration
 }
 
 type hist []float64
@@ -125,14 +147,7 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 	}
 	tmpl, err := template.
 		New("").
-		Funcs(template.FuncMap{
-			"humanDate":  humanize.Time,
-			"humanBytes": humanize.IBytes,
-			"js": func(v interface{}) template.JS {
-				out, _ := json.Marshal(v)
-				return template.JS(out)
-			},
-		}).
+		Funcs(funcMap).
 		Parse(homeTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("parsing template: %w", err)
@@ -231,6 +246,9 @@ func (c *Controller) GetProjects() error {
 func (c *Controller) GetStats() error {
 	// not checking errors here becuase some of these return lists of
 	// warnings which i don't care about at the moment
+	if uptime, _ := host.Uptime(); uptime != 0 {
+		c.lastStats.Uptime = time.Duration(uptime * 1e+9)
+	}
 	if load, _ := load.Avg(); load != nil {
 		c.lastStats.Load1 = load.Load1
 		c.lastStats.Load5 = load.Load5
