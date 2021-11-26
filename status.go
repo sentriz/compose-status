@@ -16,14 +16,14 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/oxtoacart/bpool"
 
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
-	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/load"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 const (
-	exprTempStr = "coretemp_core[0-9]+_input"
+	exprTempStr = "coretemp_core_[0-9]+"
 	exprHostStr = "Host(?::|\\(\\`)([0-9a-z\\.-]+)"
 	// host prefix & suffix. slightly stupid but needs to support:
 	// traefik v1 `traefik.frontend.rule`
