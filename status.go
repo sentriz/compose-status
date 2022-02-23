@@ -1,6 +1,7 @@
 package status
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -34,6 +35,9 @@ const (
 	labelGroup      = "xyz.senan.compose-status.group"
 	labelProject    = "com.docker.compose.project"
 )
+
+//go:embed tmpl.html
+var homeTmpl string
 
 var (
 	exprTemp *regexp.Regexp
