@@ -51,6 +51,11 @@
       margin-left: auto;
       text-align: right;
     }
+    .ellipsis {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .group {
       margin: 12px 0;
     }
@@ -79,6 +84,7 @@
       color: white;
       border-radius: 3px;
       padding: 0 6px;
+      white-space: nowrap;
     }
     .status-blue {
       background-color: #03a9f4;
@@ -143,29 +149,31 @@
       {{ range $projectName := $projects }}
       <div class="project">
         <p><strong>{{ $projectName }}</strong></p>
-        <table class="stat-table aligned-stat-table">
+        <table class="stat-table">
           {{ $project := index $rootProjects $projectName }}
           {{ range $container := $project }}
           <tr class="green">
             {{ if not (eq $container.Link "") }}
-              <td><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
+              <td class="ellipsis"><a href="//{{ $container.Link }}" target="_blank">{{ $container.Name }}</a></td>
             {{ else }}
-              <td>{{ $container.Name }}</td>
+              <td class="ellipsis">{{ $container.Name }}</td>
             {{ end }}
-            <td class="bold">{{ $container.Status }}</td>
+
+            <td style="width: 80px" class="bold ellipsis">{{ $container.Status }}</td>
+
             {{ if $container.HTTP.Timeout }}
-              <td><span class="status-badge status-red">timeout</span></td>
+              <td style="width: 80px"><span class="status-badge status-red">timeout</span></td>
             {{ else if (eq $container.HTTP.Code 0) }}
             {{ else if $container.HTTP.OK }}
-              <td><span class="status-badge status-green">{{ $container.HTTP.Duration | humanDuration }}</span></td>
+              <td style="width: 80px"><span class="status-badge status-green">{{ $container.HTTP.Duration | humanDuration }}</span></td>
             {{ else if (lt $container.HTTP.Code 300) }}
-              <td><span class="status-badge status-blue">{{ $container.HTTP.Code }}</span></td>
+              <td style="width: 80px"><span class="status-badge status-blue">{{ $container.HTTP.Code }}</span></td>
             {{ else if (lt $container.HTTP.Code 400) }}
-              <td><span class="status-badge status-cyan">{{ $container.HTTP.Code }}</span></td>
+              <td style="width: 80px"><span class="status-badge status-cyan">{{ $container.HTTP.Code }}</span></td>
             {{ else if (lt $container.HTTP.Code 500) }}
-              <td><span class="status-badge status-orange">{{ $container.HTTP.Code }}</span></td>
+              <td style="width: 80px"><span class="status-badge status-orange">{{ $container.HTTP.Code }}</span></td>
             {{ else if (lt $container.HTTP.Code 600) }}
-              <td><span class="status-badge status-red">{{ $container.HTTP.Code }}</span></td>
+              <td style="width: 80px"><span class="status-badge status-red">{{ $container.HTTP.Code }}</span></td>
             {{ end }}
           </tr>
           {{ end }}
