@@ -12,7 +12,7 @@
       --group-header-width: 18px;
       --group-header-colour: #ddd;
       --section-radius: 4px;
-      --colour-main: #FCF5B5;
+      --colour-main: #fff5a0;
     }
     * {
       margin: 0;
@@ -29,6 +29,9 @@
     p {
       font-style: italic;
     }
+    table {
+      border-spacing: 6px 1px;
+    }
     .right {
       text-align: right;
     }
@@ -36,20 +39,17 @@
       opacity: 0.3;
     }
     .red {
-      color: red;
+      color: #f44336;
     }
     .green {
-      color: #388E3C;
+      color: #4caf50;
+    }
+    .bold {
+      font-weight: bold;
     }
     .stat-table {
       margin-left: auto;
       text-align: right;
-    }
-    .stat-table tr td:last-child {
-      font-weight: bold;
-    }
-    .stat-table tr td:last-child::before {
-      content: '\00a0';
     }
     .group {
       margin: 12px 0;
@@ -75,6 +75,26 @@
     .project~.project {
       border-top: 1px solid white;
     }
+    .status-badge {
+      color: white;
+      border-radius: 3px;
+      padding: 0 6px;
+    }
+    .status-blue {
+      background-color: #03a9f4;
+    }
+    .status-green {
+      background-color: #4caf50;
+    }
+    .status-cyan {
+      background-color: #00bcd4;
+    }
+    .status-orange {
+      background-color: #ff9800;
+    }
+    .status-red {
+      background-color: #f44336;
+    }
   </style>
 </head>
 {{ $rootProjects := .Projects }} 
@@ -90,19 +110,19 @@
         <table class="stat-table">
           <tr>
             <td>cpu</td>
-            <td>{{ printf "%.2f" .Stats.CPU }}% {{ printf "%.0f" .Stats.CPUTemp }}&deg;C</td>
+            <td class="bold">{{ printf "%.2f" .Stats.CPU }}% {{ printf "%.0f" .Stats.CPUTemp }}&deg;C</td>
           </tr>
           <tr>
             <td>memory</td>
-            <td>{{ .Stats.MemUsed | humanBytes }} / {{ .Stats.MemTotal | humanBytes }}</td>
+            <td class="bold">{{ .Stats.MemUsed | humanBytes }} / {{ .Stats.MemTotal | humanBytes }}</td>
           </tr>
           <tr>
             <td>load</td>
-            <td>{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
+            <td class="bold">{{ .Stats.Load1 }} {{ .Stats.Load5 }} {{ .Stats.Load15 }}</td>
           </tr>
           <tr>
             <td>uptime</td>
-            <td>{{ .Stats.Uptime | humanDuration }}</td>
+            <td class="bold">{{ .Stats.Uptime | humanDuration }}</td>
           </tr>
         </table>
       </div>
@@ -132,7 +152,21 @@
             {{ else }}
               <td>{{ $container.Name }}</td>
             {{ end }}
-            <td>{{ $container.Status }}</td>
+            <td class="bold">{{ $container.Status }}</td>
+            {{ if $container.HTTP.Timeout }}
+              <td><span class="status-badge status-red">timeout</span></td>
+            {{ else if (eq $container.HTTP.Code 0) }}
+            {{ else if $container.HTTP.OK }}
+              <td><span class="status-badge status-green">{{ $container.HTTP.Duration | humanDuration }}</span></td>
+            {{ else if (lt $container.HTTP.Code 300) }}
+              <td><span class="status-badge status-blue">{{ $container.HTTP.Code }}</span></td>
+            {{ else if (lt $container.HTTP.Code 400) }}
+              <td><span class="status-badge status-cyan">{{ $container.HTTP.Code }}</span></td>
+            {{ else if (lt $container.HTTP.Code 500) }}
+              <td><span class="status-badge status-orange">{{ $container.HTTP.Code }}</span></td>
+            {{ else if (lt $container.HTTP.Code 600) }}
+              <td><span class="status-badge status-red">{{ $container.HTTP.Code }}</span></td>
+            {{ end }}
           </tr>
           {{ end }}
         </table>

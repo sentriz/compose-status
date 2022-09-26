@@ -13,15 +13,19 @@ import (
 )
 
 var (
-	progName     = "compose-status"
-	progPrefix   = "CS"
-	argSet       = flag.NewFlagSet(progName, flag.ExitOnError)
+	progName             = "compose-status"
+	progPrefix           = "CS"
+	argSet               = flag.NewFlagSet(progName, flag.ExitOnError)
+	argDockerNetworkName = argSet.String(
+		"docker-network-name", "",
+		"docker network name for status check",
+	)
 	argPageTitle = argSet.String(
 		"page-title", "server status",
 		"title to show at the top of the page (optional)",
 	)
 	argScanInterval = argSet.Int(
-		"scan-interval", 5,
+		"scan-interval", 60,
 		"(in seconds) time to wait between background scans (optional)",
 	)
 	argHistWindow = argSet.Int(
@@ -42,7 +46,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("error parsing args: %v\n", err)
 	}
+	if *argDockerNetworkName == "" {
+		log.Fatalln("please provide a docker network name")
+	}
 	cont, err := status.NewController(
+		*argDockerNetworkName,
 		status.WithTitle(*argPageTitle),
 		status.WithScanInternal(time.Duration(*argScanInterval)*time.Second),
 		status.WithHistWindow(time.Duration(*argHistWindow)*time.Second),

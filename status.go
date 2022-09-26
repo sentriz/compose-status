@@ -3,13 +3,16 @@ package status
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,37 +33,31 @@ const (
 	// traefik v1 `traefik.frontend.rule`
 	// traefik v1 `traefik.<name>.frontend.rule`
 	// traefik v2 `traefik.http.routers.<name>.rule`
-	labelHostPrefix = "traefik."
-	labelHostSuffix = ".rule"
-	labelGroup      = "xyz.senan.compose-status.group"
-	labelProject    = "com.docker.compose.project"
+	labelHostPrefix   = "traefik."
+	labelHostSuffix   = ".rule"
+	labelGroup        = "xyz.senan.compose-status.group"
+	labelCheckMethod  = "xyz.senan.compose-status.check.method"
+	labelCheckPort    = "xyz.senan.compose-status.check.port"
+	labelCheckPath    = "xyz.senan.compose-status.check.path"
+	labelCheckExpCode = "xyz.senan.compose-status.check.code"
+	labelProject      = "com.docker.compose.project"
 )
 
 //go:embed tmpl.html
 var homeTmpl string
 
 var (
-	exprTemp *regexp.Regexp
-	exprHost *regexp.Regexp
+	exprTemp = regexp.MustCompile(exprTempStr)
+	exprHost = regexp.MustCompile(exprHostStr)
 )
-
-func init() {
-	var err error
-	exprTemp, err = regexp.Compile(exprTempStr)
-	if err != nil {
-		log.Fatalf("error compiling temp expr: %v\n", err)
-	}
-	exprHost, err = regexp.Compile(exprHostStr)
-	if err != nil {
-		log.Fatalf("error compiling host expr: %v\n", err)
-	}
-}
 
 var funcMap = template.FuncMap{
 	"humanDate":  humanize.Time,
 	"humanBytes": humanize.IBytes,
 	"humanDuration": func(d time.Duration) string {
 		switch {
+		case d.Milliseconds() < 1000:
+			return fmt.Sprintf("%d ms", d.Milliseconds())
 		case d.Seconds() < 60:
 			return fmt.Sprintf("%.0f seconds", d.Seconds())
 		case d.Minutes() < 60:
@@ -81,6 +78,7 @@ type Container struct {
 	Name   string
 	Status string
 	Link   string
+	HTTP   HTTPCheck
 }
 
 type Stats struct {
@@ -102,17 +100,19 @@ func (h *hist) add(n float64) {
 }
 
 type Controller struct {
-	tmpl         *template.Template
-	client       *docker.Client
-	buffPool     *bpool.BufferPool
-	scanInterval time.Duration
-	pageTitle    string
-	showCredit   bool
-	lastGroups   map[string][]string
-	lastProjects map[string][]Container
-	lastStats    Stats
-	histCPU      hist
-	histTemp     hist
+	tmpl              *template.Template
+	dockerNetworkName string
+	dockerClient      *docker.Client
+	httpClient        *http.Client
+	buffPool          *bpool.BufferPool
+	scanInterval      time.Duration
+	pageTitle         string
+	showCredit        bool
+	lastGroups        map[string][]string
+	lastProjects      map[string][]Container
+	lastStats         Stats
+	histCPU           hist
+	histTemp          hist
 }
 
 type ControllerOpt func(*Controller) error
@@ -144,8 +144,8 @@ func WithCredit(c *Controller) error {
 	return nil
 }
 
-func NewController(options ...ControllerOpt) (*Controller, error) {
-	client, err := docker.NewClientFromEnv()
+func NewController(dockerNetworkName string, options ...ControllerOpt) (*Controller, error) {
+	dockerClient, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("creating docker client: %w", err)
 	}
@@ -157,8 +157,15 @@ func NewController(options ...ControllerOpt) (*Controller, error) {
 		return nil, fmt.Errorf("parsing template: %w", err)
 	}
 	cont := &Controller{
-		tmpl:      tmpl,
-		client:    client,
+		tmpl:              tmpl,
+		dockerClient:      dockerClient,
+		dockerNetworkName: dockerNetworkName,
+		httpClient: &http.Client{
+			Timeout: 25 * time.Millisecond,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 		buffPool:  bpool.NewBufferPool(64),
 		lastStats: Stats{},
 	}
@@ -190,8 +197,74 @@ func parseLabelsLink(labels map[string]string) string {
 }
 
 func parseStatus(status string) string {
-	// TODO: remove "(healthy)" er put it elsewhere
-	return strings.ToLower(status)
+	status = strings.ReplaceAll(status, "(healthy)", "")
+	status = strings.TrimSpace(status)
+	status = strings.ToLower(status)
+	return status
+}
+
+type HTTPCheck struct {
+	OK       bool
+	Code     int
+	Duration time.Duration
+	Timeout  bool
+}
+
+func checkHTTP(httpClient *http.Client, dockerNetworkID string, dockerContainer docker.APIContainers) (*HTTPCheck, error) {
+	portRaw, ok := dockerContainer.Labels[labelCheckPort]
+	if !ok {
+		return nil, nil
+	}
+	port, _ := strconv.Atoi(portRaw)
+
+	var method string = http.MethodHead
+	if m, ok := dockerContainer.Labels[labelCheckMethod]; ok {
+		method = m
+	}
+	var path string = "/"
+	if p, ok := dockerContainer.Labels[labelCheckPath]; ok {
+		path = p
+	}
+	var expCode int = 200
+	if c, ok := dockerContainer.Labels[labelCheckExpCode]; ok {
+		expCode, _ = strconv.Atoi(c)
+	}
+	var ip string
+	for _, v := range dockerContainer.Networks.Networks {
+		if v.NetworkID != dockerNetworkID {
+			continue
+		}
+		ip = v.IPAddress
+		break
+	}
+	if ip == "" {
+		return nil, nil
+	}
+
+	url := fmt.Sprintf("http://%s:%d/%s", ip, port, strings.TrimPrefix(path, "/"))
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+
+	start := time.Now()
+
+	res, err := httpClient.Do(req)
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return &HTTPCheck{Timeout: true}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("make request: %w", err)
+	}
+	check := &HTTPCheck{
+		Code:     res.StatusCode,
+		Duration: time.Since(start),
+	}
+	if (res.StatusCode >= 200 && res.StatusCode < 300) || res.StatusCode == expCode {
+		check.OK = true
+	}
+	return check, err
 }
 
 func averageTemp(cores []host.TemperatureStat) float64 {
@@ -209,8 +282,22 @@ func averageTemp(cores []host.TemperatureStat) float64 {
 	return temp / float64(numCores)
 }
 
-func (c *Controller) GetProjects() error {
-	responses, err := c.client.ListContainers(
+func (c *Controller) Refresh() error {
+	dockerNetworks, err := c.dockerClient.ListNetworks()
+	if err != nil {
+		return fmt.Errorf("list docker networks: %w", err)
+	}
+	var dockerNetworkID string
+	for _, dn := range dockerNetworks {
+		if dn.Name == c.dockerNetworkName {
+			dockerNetworkID = dn.ID
+			break
+		}
+	}
+	if dockerNetworkID == "" {
+		return fmt.Errorf("can't find docker network %q", c.dockerNetworkName)
+	}
+	dockerContainers, err := c.dockerClient.ListContainers(
 		docker.ListContainersOptions{},
 	)
 	if err != nil {
@@ -220,23 +307,31 @@ func (c *Controller) GetProjects() error {
 	c.lastProjects = map[string][]Container{}
 	groupedProjects := map[string]struct{}{}
 	// insert the current time for any container we see
-	for _, resp := range responses {
-		if len(resp.Names) == 0 {
-			return fmt.Errorf("%q does not have a name", resp.ID)
+	for _, dockerContainer := range dockerContainers {
+		if len(dockerContainer.Names) == 0 {
+			return fmt.Errorf("%q does not have a name", dockerContainer.ID)
 		}
-		project, ok := resp.Labels[labelProject]
+		project, ok := dockerContainer.Labels[labelProject]
 		if !ok {
 			continue
 		}
-		if group, ok := resp.Labels[labelGroup]; ok {
+		if group, ok := dockerContainer.Labels[labelGroup]; ok {
 			c.lastGroups[group] = append(c.lastGroups[group], project)
 			groupedProjects[project] = struct{}{}
 		}
-		c.lastProjects[project] = append(c.lastProjects[project], Container{
-			Name:   resp.Names[0],
-			Status: parseStatus(resp.Status),
-			Link:   parseLabelsLink(resp.Labels),
-		})
+		container := Container{
+			Name:   dockerContainer.Names[0],
+			Status: parseStatus(dockerContainer.Status),
+			Link:   parseLabelsLink(dockerContainer.Labels),
+		}
+		check, err := checkHTTP(c.httpClient, dockerNetworkID, dockerContainer)
+		if err != nil {
+			log.Printf("error getting http check for %q: %v\n", container.Name, err)
+		}
+		if check != nil {
+			container.HTTP = *check
+		}
+		c.lastProjects[project] = append(c.lastProjects[project], container)
 	}
 	for project := range c.lastProjects {
 		if _, ok := groupedProjects[project]; !ok {
@@ -244,10 +339,7 @@ func (c *Controller) GetProjects() error {
 			c.lastGroups["~"] = append(c.lastGroups["~"], project)
 		}
 	}
-	return nil
-}
 
-func (c *Controller) GetStats() error {
 	// not checking errors here becuase some of these return lists of
 	// warnings which i don't care about at the moment
 	if uptime, _ := host.Uptime(); uptime != 0 {
@@ -276,13 +368,14 @@ func (c *Controller) GetStats() error {
 }
 
 func (c *Controller) Start() {
+	if err := c.Refresh(); err != nil {
+		log.Printf("error refreshing: %v\n", err)
+	}
+
 	ticker := time.NewTicker(c.scanInterval)
 	for range ticker.C {
-		if err := c.GetProjects(); err != nil {
-			log.Printf("error getting projects: %v\n", err)
-		}
-		if err := c.GetStats(); err != nil {
-			log.Printf("error getting stats: %v\n", err)
+		if err := c.Refresh(); err != nil {
+			log.Printf("error refreshing: %v\n", err)
 		}
 	}
 }
