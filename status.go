@@ -57,7 +57,7 @@ var funcMap = template.FuncMap{
 	"humanDuration": func(d time.Duration) string {
 		switch {
 		case d.Milliseconds() < 1000:
-			return fmt.Sprintf("%d ms", d.Milliseconds())
+			return fmt.Sprintf("%.2f ms", float64(d)/float64(time.Millisecond))
 		case d.Seconds() < 60:
 			return fmt.Sprintf("%.0f seconds", d.Seconds())
 		case d.Minutes() < 60:
