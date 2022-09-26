@@ -60,9 +60,8 @@ func main() {
 		log.Fatalf("error creating controller: %v\n", err)
 	}
 	go cont.Start()
-	http.Handle("/", cont)
 	log.Printf("listening on %q\n", *argListenAddr)
-	if err := http.ListenAndServe(*argListenAddr, nil); err != nil {
+	if err := http.ListenAndServe(*argListenAddr, cont); err != nil {
 		log.Fatalf("error running server: %v\n", err)
 	}
 }

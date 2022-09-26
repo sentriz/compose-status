@@ -1,6 +1,7 @@
 package status
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -45,6 +46,9 @@ const (
 
 //go:embed tmpl.html
 var homeTmpl string
+
+//go:embed chart.js
+var chartJS []byte
 
 var (
 	exprTemp = regexp.MustCompile(exprTempStr)
@@ -113,6 +117,8 @@ type Controller struct {
 	lastStats         Stats
 	histCPU           hist
 	histTemp          hist
+
+	*http.ServeMux
 }
 
 type ControllerOpt func(*Controller) error
@@ -168,12 +174,15 @@ func NewController(dockerNetworkName string, options ...ControllerOpt) (*Control
 		},
 		buffPool:  bpool.NewBufferPool(64),
 		lastStats: Stats{},
+		ServeMux:  http.NewServeMux(),
 	}
 	for _, option := range options {
 		if err := option(cont); err != nil {
 			return nil, fmt.Errorf("running option: %w", err)
 		}
 	}
+	cont.ServeMux.HandleFunc("/chart.js", cont.serveChartJS)
+	cont.ServeMux.HandleFunc("/", cont.serveHome)
 	return cont, nil
 }
 
@@ -380,7 +389,7 @@ func (c *Controller) Start() {
 	}
 }
 
-func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (c *Controller) serveHome(w http.ResponseWriter, r *http.Request) {
 	tmplData := struct {
 		PageTitle    string
 		ShowCredit   bool
@@ -415,4 +424,8 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := buff.WriteTo(w); err != nil {
 		log.Printf("error writing response buffer: %v\n", err)
 	}
+}
+
+func (c *Controller) serveChartJS(w http.ResponseWriter, r *http.Request) {
+	http.ServeContent(w, r, "chart.js", time.Unix(0, 0), bytes.NewReader(chartJS))
 }
