@@ -1,6 +1,9 @@
 FROM golang:1.19-alpine AS builder
 RUN apk add -U --no-cache git
 WORKDIR /src
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
 COPY . .
 RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-w -s" -o compose-status cmd/compose-status/main.go
 
