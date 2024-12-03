@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine AS builder
+FROM golang:1.23-alpine AS builder
 RUN apk add -U --no-cache git
 WORKDIR /src
 COPY go.mod .
