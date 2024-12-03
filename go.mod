@@ -1,6 +1,6 @@
 module go.senan.xyz/compose-status
 
-go 1.19
+go 1.23
 
 require (
 	github.com/dustin/go-humanize v1.0.0
